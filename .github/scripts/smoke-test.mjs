@@ -215,6 +215,7 @@ const replayTimelineGestures = async () => {
     return value;
   };
   const chosen = await holdAtMiddle();
+  await page.mouse.move(x + 60, bounds.y + bounds.height / 2);
   await page.mouse.up();
   await expect(play).toHaveText("Pause");
   await expect.poll(() => timeline.inputValue()).not.toBe(chosen);
