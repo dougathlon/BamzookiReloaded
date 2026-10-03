@@ -98,6 +98,80 @@ const exportZook = async () => {
   for await (const chunk of stream) chunks.push(chunk);
   return Buffer.concat(chunks).toString("utf8");
 };
+const exportReplay = async () => {
+  const downloaded = page.waitForEvent("download");
+  await page.locator("#motion-export").click();
+  const stream = await (await downloaded).createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8");
+};
+const cameraGestures = async (kind) => {
+  const simulator = kind === "simulator";
+  const canvas = page.locator(simulator ? "#simulator-arena-canvas" : "#motion-canvas");
+  const previews = page.locator(simulator ? "#simulator-camera-preview-canvas" : "#motion-camera-preview-canvas");
+  const heading = page.locator(simulator ? "#simulator-title" : "#motion-player-title");
+  const button = (id) => page.locator(`[data-${simulator ? "simulator" : "motion"}-camera="camera-${id}"]`);
+  const pixels = async (element) => {
+    // Compare the same focus/hover state; the canvas focus ring and miniature
+    // button overlays are intentional accessibility UI, not camera movement.
+    await heading.focus();
+    await heading.hover();
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    return createHash("sha256").update(await element.screenshot()).digest("hex");
+  };
+  const drag = async (element, zoom) => {
+    await element.scrollIntoViewIfNeeded();
+    const bounds = await element.boundingBox();
+    assert.ok(bounds, "Camera surface must be measurable");
+    const x = bounds.x + bounds.width / 2;
+    const y = bounds.y + bounds.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(x + 24, y + 8, { steps: 3 });
+    if (zoom) await page.mouse.wheel(0, -120);
+    await page.mouse.up({ button: "right" });
+  };
+  await button(1).click();
+  await canvas.press("Home");
+  const mainDefault = await pixels(canvas);
+  await drag(canvas, false);
+  const mainRotated = await pixels(canvas);
+  assert.notEqual(mainRotated, mainDefault, "Main right-drag must visibly rotate the view");
+  await canvas.hover();
+  await page.mouse.wheel(0, -120);
+  assert.notEqual(await pixels(canvas), mainRotated, "Main wheel must visibly zoom without a held button");
+  await shot(`${kind}-main-camera-adjusted`);
+  await canvas.press("Home");
+  assert.equal(await pixels(canvas), mainDefault, "Home must restore the exact default main view");
+  const miniatureDefault = await pixels(previews);
+  await button(3).hover();
+  await page.mouse.wheel(0, -100);
+  assert.equal(await pixels(previews), miniatureDefault, "Unmodified miniature wheel must not zoom");
+  await drag(button(3), true);
+  await expect(button(1)).toHaveAttribute("aria-pressed", "true");
+  assert.equal(await pixels(canvas), mainDefault, "Non-selected miniature must not change the main view");
+  assert.notEqual(await pixels(previews), miniatureDefault, "Miniature right-drag/wheel must change its view");
+  await shot(`${kind}-miniature-camera-adjusted`);
+  await button(3).press("Home");
+  assert.equal(await pixels(previews), miniatureDefault, "Miniature Home must restore exact default views");
+  await button(2).click();
+  const autoFit = await pixels(canvas);
+  await canvas.hover();
+  await page.mouse.wheel(0, -120);
+  await button(2).hover();
+  await page.mouse.down({ button: "right" });
+  await page.mouse.wheel(0, -120);
+  await page.mouse.up({ button: "right" });
+  await button(2).press("+");
+  assert.equal(await pixels(canvas), autoFit, "Camera 2 must keep its automatic distance on every zoom input");
+  await canvas.press("ArrowLeft");
+  assert.notEqual(await pixels(canvas), autoFit, "Camera 2 must still support focused keyboard orbit");
+  await canvas.press("Home");
+  assert.equal(await pixels(canvas), autoFit, "Camera 2 orbit resets exactly");
+  await button(1).click();
+  recordCheck(`${kind}: main/miniature right-drag and wheel, independent views, Camera 2 auto-fit, keyboard orbit and exact Home reset`);
+};
 const hologramPixels = async (panel, name, parts) => {
   const preview = panel.locator(".zook-hologram");
   await expect(preview).toHaveAttribute("data-hologram-state", "ready");
@@ -374,6 +448,7 @@ try {
   const contests = page.locator("#simulator-contest-list button");
   await expect(contests).toHaveCount(9);
   await accessibility("Simulator setup");
+  await cameraGestures("simulator");
   const saved = [];
   for (let index = 0; index < 9; index += 1) {
     await contests.nth(index).click();
@@ -434,12 +509,12 @@ try {
     for (const button of await page.locator("button[data-motion-camera]").all()) await button.click();
     if (index === 6) await shot("arena-replay");
     if (index === 8) await shot("hurdles-individual-replay");
-    const downloaded = page.waitForEvent("download");
-    await page.locator("#motion-export").click();
-    const stream = await (await downloaded).createReadStream();
-    const chunks = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    const replay = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const replayBytes = await exportReplay();
+    if (index === 3) {
+      await cameraGestures("motion-player");
+      assert.equal(await exportReplay(), replayBytes, "Camera manipulation must not change any exported replay byte");
+    }
+    const replay = JSON.parse(replayBytes);
     assert.equal(replay.schemaVersion, 2);
     assert.equal(replay.participants.length, 2);
     assert.ok(replay.participants.every(({ zook }) => zook.parts.length === 9));

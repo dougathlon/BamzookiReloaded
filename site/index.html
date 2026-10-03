@@ -9,8 +9,8 @@
       content="Evidence-bounded browser reconstruction of the original BAMZOOKi v3.1 suite."
     />
     <title>BAMZOOKi — browser reconstruction</title>
-    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-6U1S-rh1.js"></script>
-    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-BFrzoh7D.css">
+    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-xhOBaGpx.js"></script>
+    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-DgKdl_Rp.css">
   </head>
   <body>
     <main id="app" aria-busy="true">
@@ -134,7 +134,8 @@
                     id="simulator-arena-canvas"
                     role="img"
                     aria-label="Provisional reconstructed contest arena and live contest view"
-                    aria-describedby="simulator-arena-caption"
+                    aria-describedby="simulator-arena-caption simulator-camera-help"
+                    tabindex="0"
                   ></canvas>
                   <figcaption id="simulator-arena-caption">
                     Arena geometry comes from readable v3.1 scene records. Motion, physics, timing, finish, and winner behavior are isolated reconstruction choices, not recovered historical rules.
@@ -152,12 +153,13 @@
                   <div class="simulator-camera-strip" aria-label="Simulator camera selectors">
                     <canvas id="simulator-camera-preview-canvas" aria-hidden="true"></canvas>
                     <div>
-                      <button type="button" data-simulator-camera="camera-1" aria-pressed="true">Camera 1</button>
-                      <button type="button" data-simulator-camera="camera-2" aria-pressed="false">Camera 2</button>
-                      <button type="button" data-simulator-camera="camera-3" aria-pressed="false">Camera 3</button>
-                      <button type="button" data-simulator-camera="camera-4" aria-pressed="false">Camera 4</button>
+                      <button type="button" data-simulator-camera="camera-1" aria-pressed="true" aria-describedby="simulator-camera-help">Camera 1</button>
+                      <button type="button" data-simulator-camera="camera-2" aria-pressed="false" aria-describedby="simulator-camera-help">Camera 2</button>
+                      <button type="button" data-simulator-camera="camera-3" aria-pressed="false" aria-describedby="simulator-camera-help">Camera 3</button>
+                      <button type="button" data-simulator-camera="camera-4" aria-pressed="false" aria-describedby="simulator-camera-help">Camera 4</button>
                     </div>
                   </div>
+                  <p id="simulator-camera-help" class="contest-camera-help">Right-drag any view to rotate. Wheel zooms the main view; hold the right button to zoom a miniature. Camera 2 stays auto-framed. Keyboard alternative: focus a view, use arrows to rotate, +/− to zoom, Home to reset. Camera rates and framing are Provisional.</p>
                 </section>
                 <dl id="simulator-contest-details"></dl>
                 <section id="simulator-scene-evidence" class="simulator-scene-evidence" aria-labelledby="simulator-scene-evidence-title">
@@ -220,7 +222,7 @@
                 <div class="motion-view-row">
                   <div class="motion-stage" aria-label="Sampled replay state">
                     <div class="motion-main-view">
-                      <canvas id="motion-canvas" aria-label="Motion Player main three-dimensional replay view"></canvas>
+                      <canvas id="motion-canvas" role="img" aria-label="Motion Player main three-dimensional replay view" aria-describedby="motion-camera-help" aria-disabled="true" tabindex="-1"></canvas>
                       <span id="motion-main-label">Open a replay to view it here</span>
                       <strong id="motion-stage-tick">Ejected</strong>
                       <small id="motion-stage-participants">Open or record a browser-native replay.</small>
@@ -228,13 +230,13 @@
                     <div class="motion-camera-strip" aria-label="Motion Player camera selectors">
                       <canvas id="motion-camera-preview-canvas" aria-hidden="true"></canvas>
                       <div class="motion-camera-buttons">
-                        <button type="button" data-motion-camera="camera-1" aria-pressed="true" disabled>Camera 1</button>
-                        <button type="button" data-motion-camera="camera-2" aria-pressed="false" disabled>Camera 2</button>
-                        <button type="button" data-motion-camera="camera-3" aria-pressed="false" disabled>Camera 3</button>
-                        <button type="button" data-motion-camera="camera-4" aria-pressed="false" disabled>Camera 4</button>
+                        <button type="button" data-motion-camera="camera-1" aria-pressed="true" aria-describedby="motion-camera-help" disabled>Camera 1</button>
+                        <button type="button" data-motion-camera="camera-2" aria-pressed="false" aria-describedby="motion-camera-help" disabled>Camera 2</button>
+                        <button type="button" data-motion-camera="camera-3" aria-pressed="false" aria-describedby="motion-camera-help" disabled>Camera 3</button>
+                        <button type="button" data-motion-camera="camera-4" aria-pressed="false" aria-describedby="motion-camera-help" disabled>Camera 4</button>
                       </div>
                     </div>
-                    <p>Replay uses exact recorded samples with Provisional camera framing. Camera 2 fits both Zooks. Neither browser replay version stores camera tracks.</p>
+                    <p id="motion-camera-help" class="contest-camera-help">Right-drag any view to rotate. Wheel zooms the main view; hold the right button to zoom a miniature. Camera 2 stays auto-framed. Keyboard alternative: focus a view, use arrows to rotate, +/− to zoom, Home to reset. Camera rates and framing are Provisional; views are not saved in replay files.</p>
                   </div>
                   <div class="motion-timeline-vertical">
                     <label for="motion-timeline">Authoritative sampled timeline</label>
