@@ -19,6 +19,8 @@ In **Select**, drag a side of the selected part's translucent box to reshape it.
 
 Use **File / system → Save** to store the current Zook locally. **Save As** creates a differently named copy without changing existing saves. The browser copy uses its new name in Passport; subsequent Save updates that copy. Export remains the way to keep a separate downloadable backup.
 
+If another tab changes or deletes the saved Zook, Save stops and keeps your unsaved edits. Use **Save As** or **Export** to preserve them before reopening the stored version. Delete also checks that its preview is still current, and Repair stops if the library changes during its checks. If an older game tab can no longer save after this update, export its unsaved work and reload it; existing saved records are retained.
+
 **New Zook** asks for a name before creating its root body. When New or Open would replace modified work, choose **Save**, **Don't Save**, or **Cancel**. A failed save or import keeps the current Zook open. Cancelling the New name prompt also keeps it open, including after choosing Save.
 
 The Loader's **Sort** menu can rank each of the five trials. Historical metadata, current Provisional Play v2 and retained legacy v1 results are separate score sets; the caption identifies which one you are viewing. Higher speed/distance and lower Lap time come first, with missing or incompatible records last. This ordering is a reconstruction choice, not a recovered original algorithm. Sorting never changes the saved results.

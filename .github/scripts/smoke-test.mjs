@@ -13,7 +13,7 @@ const { default: AxeBuilder } = require("@axe-core/playwright");
 const engine = process.env.BROWSER_TEST_ENGINE ?? "chromium";
 assert.ok(["chromium", "firefox", "webkit"].includes(engine), "Unsupported browser test engine");
 const suite = process.env.BROWSER_TEST_SUITE;
-assert.ok(["contests", "editor", "trial-focus"].includes(suite), "Unsupported browser test suite");
+assert.ok(["contests", "editor", "trial-focus", "storage"].includes(suite), "Unsupported browser test suite");
 const output = path.resolve(process.env.BROWSER_TEST_OUTPUT ?? "browser-results");
 const site = await realpath("site");
 const prefix = "/BamzookiReloaded/";
@@ -262,13 +262,13 @@ const attachmentFocusPreflight = async () => {
     await probe.close();
   }
 };
-const fileCommand = async (name) => {
-  await page.locator("#file-system-command").click();
-  await page.getByRole("dialog", { name: "File / system" }).getByRole("button", { name, exact: true }).click();
+const fileCommand = async (name, target = page) => {
+  await target.locator("#file-system-command").click();
+  await target.getByRole("dialog", { name: "File / system" }).getByRole("button", { name, exact: true }).click();
 };
-const exportZook = async () => {
-  const downloaded = page.waitForEvent("download");
-  await fileCommand("Export");
+const exportZook = async (target = page) => {
+  const downloaded = target.waitForEvent("download");
+  await fileCommand("Export", target);
   const stream = await (await downloaded).createReadStream();
   const chunks = [];
   for await (const chunk of stream) chunks.push(chunk);
@@ -1225,14 +1225,242 @@ const editorFileJourney = async ({ originalBytes, changedCopyBytes }) => {
   recordCheck("Motion path: visible keyboard focus after coordinate apply, insertion and minimum-size removal; exact paths restored");
 };
 
+const storageJourney = async () => {
+  const peer = await context.newPage();
+  peer.setDefaultTimeout(20_000);
+  peer.on("pageerror", (error) => errors.push(`Other tab: ${error.message}`));
+  peer.on("console", (message) => { if (message.type() === "error") errors.push(`Other tab: ${message.text()}`); });
+  peer.on("response", (response) => {
+    if (response.status() >= 400 && !response.url().endsWith("/favicon.ico")) errors.push(`Other tab HTTP ${response.status()}`);
+  });
+  const refresh = async (target) => {
+    await target.bringToFront();
+    if (await target.locator("#zook-loader").isHidden()) await target.locator("#loader-command").click();
+    await target.locator('[data-loader-category="my-zooks"]').click();
+    await expect(target.locator("#loader-open")).toBeEnabled();
+  };
+  const open = async (target, name) => {
+    await refresh(target);
+    await target.getByRole("option", { name: new RegExp(`^${name}\\b`) }).click();
+    await target.locator("#loader-open").click();
+    await expect(target.locator("#zook-loader")).toBeHidden();
+  };
+  const width = async (target, value) => {
+    await target.bringToFront();
+    await target.getByLabel("Width", { exact: true }).fill(value);
+    await expect(target.locator("#editor-announcement")).toHaveText("Reshape blob complete");
+  };
+  const save = async (target) => {
+    await fileCommand("Save", target);
+    await expect(target.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
+  };
+  const saveAs = async (target, name) => {
+    await fileCommand("Save As", target);
+    await target.locator("#save-as-name").fill(name);
+    await target.locator("#save-as-confirm").click();
+    await expect(target.locator("#save-as-dialog")).toBeHidden();
+    await expect(target.locator("#editor-announcement")).toContainText("saved as a new My Zooks entry");
+  };
+  const records = () => page.evaluate(async () => {
+    const request = indexedDB.open("bamzooki-original-v31");
+    const db = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const transaction = db.transaction(["zooks", "zookIndex", "photos"], "readonly");
+      const done = new Promise((resolve, reject) => {
+        transaction.oncomplete = resolve;
+        transaction.onabort = () => reject(transaction.error);
+      });
+      const result = await Promise.all(["zooks", "zookIndex", "photos"].map(store => new Promise((resolve, reject) => {
+        const read = transaction.objectStore(store).getAll();
+        read.onsuccess = () => resolve(read.result);
+        read.onerror = () => reject(read.error);
+      })));
+      await done;
+      return { zooks: result[0], index: result[1], photos: result[2] };
+    } finally { db.close(); }
+  });
+  const storedBytes = (stored, name) => stored.zooks.find(record => JSON.parse(record.documentJson).metadata.name === name)?.documentJson;
+  try {
+    await page.goto(`${origin}${prefix}`);
+    await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+    await page.locator("#loader-new").click();
+    await page.locator("#new-zook-name").fill("Storage Zook");
+    await page.locator("#new-zook-confirm").click();
+    await expect(page.locator("#zook-loader")).toBeHidden();
+    await save(page);
+    await peer.goto(`${origin}${prefix}`);
+    await expect(peer.locator("#app")).toHaveAttribute("aria-busy", "false");
+    await open(peer, "Storage Zook");
+    await width(peer, "0.9");
+    const unsaved = await exportZook(peer);
+    await width(page, "0.8");
+    await save(page);
+    const newer = await exportZook();
+    const beforeConflict = await records();
+    await peer.bringToFront();
+    await fileCommand("Save", peer);
+    await expect(peer.locator("#editor-announcement")).toContainText("Use Save As or Export");
+    await peer.screenshot({ path: path.join(output, `${engine}-storage-save-conflict.png`), fullPage: true });
+    await fileCommand("New", peer);
+    await expect(peer.locator("#loader-replace-confirm")).toBeVisible();
+    await peer.locator("#loader-replace-cancel").click();
+    await peer.locator("#loader-close").click();
+    assert.equal(await exportZook(peer), unsaved);
+    assert.deepEqual(await records(), beforeConflict, "A conflicting Save cannot write any store");
+    recordCheck("Storage conflict: stale Save preserves exact unsaved bytes, dirty state and all three stores");
+    await saveAs(peer, "Recovered conflict");
+    await width(peer, "1.0");
+    await save(peer);
+    const copy = await exportZook(peer);
+    assert.equal(storedBytes(await records(), "Storage Zook"), newer);
+    assert.equal(storedBytes(await records(), "Recovered conflict"), copy);
+    assert.equal((await records()).zooks.length, 2);
+    recordCheck("Storage recovery: Save As creates an independent copy and subsequent Save updates only that copy");
+
+    await refresh(page);
+    await page.getByRole("option", { name: /^Storage Zook\b/ }).click();
+    await page.locator("#loader-delete").click();
+    await open(peer, "Storage Zook");
+    await width(peer, "1.1");
+    await save(peer);
+    const beforeDelete = await records();
+    await page.bringToFront();
+    await page.locator("#loader-delete-confirm-button").click();
+    await expect(page.locator("#loader-announcement")).toContainText("Nothing was deleted");
+    assert.deepEqual(await records(), beforeDelete);
+    await shot("storage-delete-conflict");
+    await accessibility("Delete conflict");
+    recordCheck("Storage deletion: a changed confirmation preview cannot delete a newer document or its index");
+
+    await refresh(page);
+    await page.getByRole("option", { name: /^Storage Zook\b/ }).click();
+    await page.locator("#loader-delete").click();
+    await page.locator("#loader-delete-confirm-button").click();
+    await expect(page.locator("#loader-announcement")).toHaveText("Local Zook deleted");
+    assert.equal((await records()).zooks.length, 1);
+    await width(peer, "1.2");
+    const deletedUnsaved = await exportZook(peer);
+    await fileCommand("Save", peer);
+    await expect(peer.locator("#editor-announcement")).toContainText("Use Save As or Export");
+    assert.equal(await exportZook(peer), deletedUnsaved);
+    assert.equal((await records()).zooks.length, 1, "Stale Save must not resurrect a deleted identity");
+    await saveAs(peer, "Recovered deletion");
+    recordCheck("Storage deletion recovery: stale Save cannot resurrect a deleted entry; Save As retains its unsaved work");
+
+    const corruptId = (await records()).index.find(entry => entry.name === "Recovered conflict").id;
+    await page.evaluate(async (id) => {
+      const request = indexedDB.open("bamzooki-original-v31");
+      const db = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        const transaction = db.transaction("zookIndex", "readwrite");
+        transaction.objectStore("zookIndex").put({ id, name: 7 });
+        await new Promise((resolve, reject) => {
+          transaction.oncomplete = resolve;
+          transaction.onabort = () => reject(transaction.error);
+        });
+      } finally { db.close(); }
+    }, corruptId);
+    await refresh(page);
+    await page.locator("#loader-repair").click();
+    // Pause only the first validation digest in this tab. The other tab then
+    // completes an ordinary UI Save between Repair's read and write snapshots.
+    await page.evaluate(() => {
+      const original = crypto.subtle.digest;
+      crypto.subtle.digest = function (...args) {
+        crypto.subtle.digest = original;
+        window.__storageRepairWaiting = true;
+        return new Promise(resolve => { window.__resumeStorageRepair = resolve; })
+          .then(() => Reflect.apply(original, this, args));
+      };
+    });
+    await page.locator("#loader-repair-confirm-button").click();
+    await expect.poll(() => page.evaluate(() => window.__storageRepairWaiting === true)).toBe(true);
+    await width(peer, "1.3");
+    await save(peer);
+    const beforeRepair = await records();
+    await page.evaluate(() => { window.__resumeStorageRepair(); delete window.__resumeStorageRepair; delete window.__storageRepairWaiting; });
+    await expect(page.locator("#loader-announcement")).toContainText("Nothing was repaired");
+    assert.deepEqual(await records(), beforeRepair, "Repair must not partially apply a stale plan");
+    await page.bringToFront();
+    await shot("storage-repair-conflict");
+    await accessibility("Repair conflict");
+    recordCheck("Storage repair race: an ordinary second-tab Save invalidates the repair snapshot without any partial write");
+    await refresh(page);
+    await page.locator("#loader-repair").click();
+    await page.locator("#loader-repair-confirm-button").click();
+    await expect(page.locator("#loader-announcement")).toContainText("Rebuilt 1 recoverable index record");
+    const repaired = await records();
+    assert.deepEqual(repaired.zooks, beforeRepair.zooks);
+    assert.deepEqual(repaired.photos, beforeRepair.photos);
+    assert.equal(repaired.index.find(entry => entry.id === corruptId).name, "Recovered conflict");
+    await expect(page.locator("#loader-repair")).toBeHidden();
+    recordCheck("Storage repair retry: a fresh confirmed repair rebuilds only the invalid index and preserves both documents");
+
+    const legacyContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+    try {
+      const legacy = await legacyContext.newPage();
+      // An empty script keeps this isolated fixture page from opening the new
+      // database before the prior-version records and connection are prepared.
+      await legacy.route("**/assets/*.js", route => route.fulfill({ contentType: "text/javascript", body: "" }));
+      await legacy.goto(`${origin}${prefix}`);
+      await legacy.evaluate(async (fixture) => {
+        const request = indexedDB.open("bamzooki-original-v31", 1);
+        request.onupgradeneeded = () => {
+          for (const name of ["zooks", "zookIndex", "photos"]) request.result.createObjectStore(name, { keyPath: "id" });
+        };
+        const db = await new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        const transaction = db.transaction(["zooks", "zookIndex"], "readwrite");
+        for (const record of fixture.zooks) transaction.objectStore("zooks").put(record);
+        for (const record of fixture.index) transaction.objectStore("zookIndex").put(record);
+        await new Promise((resolve, reject) => {
+          transaction.oncomplete = resolve;
+          transaction.onabort = () => reject(transaction.error);
+        });
+        window.__legacyConnection = db;
+        db.onversionchange = () => { db.close(); window.__legacyClosed = true; };
+      }, repaired);
+      const upgraded = await legacyContext.newPage();
+      upgraded.on("pageerror", error => errors.push(`Upgrade: ${error.message}`));
+      upgraded.on("console", message => { if (message.type() === "error") errors.push(`Upgrade: ${message.text()}`); });
+      await upgraded.goto(`${origin}${prefix}`);
+      await expect(upgraded.locator("#app")).toHaveAttribute("aria-busy", "false");
+      await expect.poll(() => legacy.evaluate(() => window.__legacyClosed === true)).toBe(true);
+      assert.equal(await legacy.evaluate(() => {
+        try { window.__legacyConnection.transaction("zooks", "readwrite"); return "unexpected success"; }
+        catch (error) { return error.name; }
+      }), "InvalidStateError");
+      assert.equal(await legacy.evaluate(() => new Promise(resolve => {
+        const request = indexedDB.open("bamzooki-original-v31", 1);
+        request.onerror = event => { event.preventDefault(); resolve(request.error.name); };
+        request.onsuccess = () => { request.result.close(); resolve("unexpected success"); };
+      })), "VersionError");
+      await open(upgraded, "Recovered conflict");
+      assert.equal(await exportZook(upgraded), storedBytes(repaired, "Recovered conflict"));
+      await open(upgraded, "Recovered deletion");
+      assert.equal(await exportZook(upgraded), storedBytes(repaired, "Recovered deletion"));
+      recordCheck("Storage upgrade: v1 records survive byte-identically while old connections close and old-version writers are refused");
+    } finally { await legacyContext.close(); }
+  } finally { await peer.close(); }
+};
+
 try {
   if (suite === "trial-focus") await trialFocusJourney();
+  else if (suite === "storage") await storageJourney();
   else {
     const library = await prepareLibraryJourney();
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 9 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);

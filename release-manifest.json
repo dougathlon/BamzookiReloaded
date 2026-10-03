@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 73318,
-      "sha256": "7c75c05148548a5f492db521286be7570d9806fbfe4ce2c02b98eb87ee2611bb"
+      "bytes": 86033,
+      "sha256": "3001a96bc76705dff3363d13d25d378e3662899a27dec0143d9ac0c9e6a0552e"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
@@ -13,13 +13,13 @@
     },
     {
       "path": ".github/workflows/pages.yml",
-      "bytes": 2592,
-      "sha256": "834619d4a194ecaf0e6a0f865cf21a7c3208e63100b162df99e9373fe56c2383"
+      "bytes": 2632,
+      "sha256": "6f48b518e0db06ec9ff9e6f557caaecd9736f4c34d7ac50b8c7fb8a3b8c6db39"
     },
     {
       "path": "README.md",
-      "bytes": 4300,
-      "sha256": "2dfb00514930b6537536c09765d2e6ec81820913e9cf0b0ada7930e39e568348"
+      "bytes": 4724,
+      "sha256": "177e696736bc36684fa9d65b3981a71d64a32e5d09138ccf68995b7f2edb546c"
     },
     {
       "path": "site/.nojekyll",
@@ -32,14 +32,14 @@
       "sha256": "ce5e961c7a30683c17b3798633507befc0a794c85852c1f8c6dd52eed47b4d60"
     },
     {
-      "path": "site/assets/index-Cy_mRcEH.js",
-      "bytes": 3860609,
-      "sha256": "8ff2032dff42a626655dfe51a534d588a223372ac9cedb94b3a8f7dcc619e689"
+      "path": "site/assets/index-D0eCDso8.js",
+      "bytes": 3863402,
+      "sha256": "042c3439547633d527defa3e848da1bb0b3c045ad65ddaecd303e1354313317e"
     },
     {
       "path": "site/index.html",
       "bytes": 52833,
-      "sha256": "0a7db98c6698e734e15a744b275f32e6855ae3ada51c1ed77a3c6675a016ed10"
+      "sha256": "a73f3dcaead34e9e90e13ab11900572315c2403e9cd28621bcbfb0848f51abf6"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",
