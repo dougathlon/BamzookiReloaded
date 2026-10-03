@@ -51,7 +51,12 @@ async function listFiles(root, relative = "") {
 }
 
 export async function auditPublicRelease(root, { allowPreviousRelease = false } = {}) {
-  const manifest = JSON.parse(await readFile(path.join(root, "release-manifest.json"), "utf8"));
+  return auditPublicReleaseSnapshot(await listFiles(root),
+    (name) => readFile(path.join(root, name)), { allowPreviousRelease });
+}
+
+export async function auditPublicReleaseSnapshot(names, readBytes, { allowPreviousRelease = false } = {}) {
+  const manifest = JSON.parse((await readBytes("release-manifest.json")).toString("utf8"));
   if (manifest === null || typeof manifest !== "object" ||
       Object.keys(manifest).sort().join(",") !== "files,schema" ||
       manifest.schema !== "bamzooki.public-release.v1" || !Array.isArray(manifest.files) ||
@@ -59,7 +64,7 @@ export async function auditPublicRelease(root, { allowPreviousRelease = false } 
         Object.keys(entry).sort().join(",") !== "bytes,path,sha256")) {
     throw new Error("Public release manifest is invalid");
   }
-  const actual = await listFiles(root);
+  const actual = [...names].sort();
   const expected = manifest.files.map(({ path: name }) => name);
   if (expected.length > 40 || new Set(expected).size !== expected.length ||
       expected.some((name) => !isPublicReleaseFile(name)) ||
@@ -70,7 +75,7 @@ export async function auditPublicRelease(root, { allowPreviousRelease = false } 
   }
   let totalBytes = 0;
   for (const entry of manifest.files) {
-    const bytes = await readFile(path.join(root, entry.path));
+    const bytes = await readBytes(entry.path);
     if (!Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || entry.bytes > 10_000_000 ||
         bytes.length !== entry.bytes || createHash("sha256").update(bytes).digest("hex") !== entry.sha256) {
       throw new Error(`Public release integrity mismatch: ${entry.path}`);
@@ -81,7 +86,7 @@ export async function auditPublicRelease(root, { allowPreviousRelease = false } 
     }
   }
   if (totalBytes > 15_000_000) throw new Error("Public release exceeds its byte budget");
-  const html = await readFile(path.join(root, "site/index.html"), "utf8");
+  const html = (await readBytes("site/index.html")).toString("utf8");
   if (!html.includes("not affiliated with or endorsed by the BBC or Gameware")) {
     throw new Error("Public disclaimer is missing");
   }

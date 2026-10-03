@@ -88,11 +88,27 @@ const accessibility = async (name) => {
 };
 const keyboardFocus = async (control) => {
   await expect(control).toBeFocused();
-  const visible = await control.evaluate(element => {
+  const focus = await control.evaluate(element => {
     const style = getComputedStyle(element);
-    return element.matches(":focus-visible") && style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2;
+    return { id: element.id, visible: element.matches(":focus-visible"), outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
   });
-  assert.equal(visible, true, "Keyboard focus must have a visible outline");
+  assert.ok(focus.visible && focus.outlineStyle !== "none" && parseFloat(focus.outlineWidth) >= 2,
+    `Keyboard focus must have a visible outline: ${JSON.stringify(focus)}`);
+};
+const keyboardActivate = async (control) => {
+  // Programmatic locator focus after a pointer click does not establish the
+  // same focus-visible modality as actual keyboard navigation in every engine.
+  if (await control.evaluate(element => element === document.activeElement && !element.matches(":focus-visible"))) {
+    await page.keyboard.press("Shift+Tab");
+  }
+  for (let index = 0; index < 120; index += 1) {
+    if (await control.evaluate(element => element === document.activeElement)) {
+      await page.keyboard.press("Enter");
+      return;
+    }
+    await page.keyboard.press("Tab");
+  }
+  throw new Error("Keyboard action is unreachable after 120 Tabs");
 };
 const fileCommand = async (name) => {
   await page.locator("#file-system-command").click();
@@ -970,18 +986,18 @@ try {
   }
   recordCheck("Bounds reshape: Escape, external focus, actual capture loss and resize cancel without changing canonical bytes");
   await page.locator("#mode-add").click();
-  await page.getByRole("button", { name: "Left", exact: true }).press("Enter");
+  await keyboardActivate(page.getByRole("button", { name: "Left", exact: true }));
   await keyboardFocus(page.locator("#part-select"));
   await page.locator("#mode-add").click();
   await page.locator("#placement-parent").selectOption("p0002");
-  await page.getByRole("button", { name: "Below", exact: true }).press("Enter");
+  await keyboardActivate(page.getByRole("button", { name: "Below", exact: true }));
   await keyboardFocus(page.locator("#part-select"));
   await shot("keyboard-placement-focus");
   await page.locator("#part-select").selectOption("p0002");
   await page.locator("#attachment-facing-roll").fill("-25");
   await page.locator("#attachment-apply").click();
   await expect(page.locator("#editor-announcement")).toHaveText("Adjust position and facing complete");
-  await page.locator("#mirror-command").press("Enter");
+  await keyboardActivate(page.locator("#mirror-command"));
   await expect(page.locator("#part-summary")).toHaveText("5 parts");
   await keyboardFocus(page.locator("#part-select"));
   await page.locator("#part-select").selectOption("p0003");
@@ -1005,13 +1021,13 @@ try {
   assert.equal(await exportZook(), nestedAfter);
   await accessibility("Bounds reshape editor");
   recordCheck("Bounds reshape: rotated nested mirror partners, unchanged transforms/paths and exact Undo/Redo");
-  await page.locator("#copy-command").press("Enter");
+  await keyboardActivate(page.locator("#copy-command"));
   await keyboardFocus(page.locator("#placement-parent"));
   await expect(page.locator("#mode-add")).toHaveAttribute("aria-pressed", "true");
   await shot("keyboard-copy-focus");
   await page.locator("#mode-select").press("Enter");
   assert.equal(await exportZook(), nestedAfter, "Cancelling Copy must preserve the exact construction");
-  await page.locator("#delete-command").press("Enter");
+  await keyboardActivate(page.locator("#delete-command"));
   await expect(page.locator("#editor-announcement")).toHaveText("Selected branch deleted");
   await keyboardFocus(page.locator("#part-select"));
   const deleted = JSON.parse(await exportZook());
@@ -1019,6 +1035,24 @@ try {
   await page.locator("#undo-command").press("Enter");
   assert.equal(await exportZook(), nestedAfter, "Undo must restore exact branch bytes after Delete");
   recordCheck("Branch actions: visible keyboard focus after Mirror, Copy and Delete; cancelled Copy and undone Delete preserve exact bytes");
+  await page.locator("#part-select").selectOption("p0003");
+  await page.locator("#motion-mode").selectOption("single");
+  await keyboardActivate(page.locator("#tutorial-triangle"));
+  await expect(page.locator("#motion-point-select option")).toHaveCount(3);
+  await page.locator("#motion-point-x").fill("0.2");
+  await keyboardActivate(page.locator("#motion-point-apply"));
+  await keyboardFocus(page.locator("#motion-point-apply"));
+  const motionAfterApply = JSON.parse(await exportZook()).parts.map(({ id, motion }) => ({ id, motion }));
+  await keyboardActivate(page.locator("#motion-point-insert"));
+  await expect(page.locator("#motion-point-select option")).toHaveCount(4);
+  await keyboardFocus(page.locator("#motion-point-insert"));
+  await keyboardActivate(page.locator("#motion-point-remove"));
+  await expect(page.locator("#motion-point-select option")).toHaveCount(3);
+  await expect(page.locator("#motion-point-remove")).toBeDisabled();
+  await keyboardFocus(page.locator("#motion-point-select"));
+  await shot("keyboard-path-focus");
+  assert.deepEqual(JSON.parse(await exportZook()).parts.map(({ id, motion }) => ({ id, motion })), motionAfterApply);
+  recordCheck("Motion path: visible keyboard focus after coordinate apply, insertion and minimum-size removal; exact paths restored");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {
