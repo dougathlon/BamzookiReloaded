@@ -480,12 +480,13 @@ try {
         await expect(page.locator("#motion-timeline")).toHaveValue("0");
         reportProgress(`Hurdles profile v${version}: rendered geometry comparison`);
         if (version === 1) {
-          await expect.poll(canvasHash).not.toBe(currentPixels);
           legacyPixels = await canvasHash();
+          assert.notEqual(legacyPixels, currentPixels, "Legacy Hurdles geometry must differ from the current course");
           await shot("hurdles-legacy-replay");
         } else {
           if (version === 3) await shot("hurdles-prior-profile-start");
-          await expect.poll(canvasHash).toBe(version === 2 ? legacyPixels : currentPixels);
+          assert.equal(await canvasHash(), version === 2 ? legacyPixels : currentPixels,
+            `Hurdles profile v${version} must render the expected geometry at tick zero`);
         }
       }
       assert.equal(replay.outcome, null);
