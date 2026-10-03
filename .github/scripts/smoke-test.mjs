@@ -445,6 +445,8 @@ try {
   await expect(page.locator("#loader-preview")).toContainText("Provisional Play v2");
   await expect(page.locator("#loader-preview")).toContainText("Legacy Provisional v1");
   await expect(page.locator("#loader-sort-note")).toContainText("Lowest first");
+  await page.locator("#loader-tab-achievement").press("Tab");
+  await expect(page.locator("#loader-preview")).toBeFocused();
   await accessibility("My Zooks result sorting");
   await shot("my-zooks-results");
   await page.getByRole("button", { name: "My Zooks", exact: true }).click();
