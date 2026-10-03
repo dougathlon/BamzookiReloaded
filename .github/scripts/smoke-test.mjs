@@ -143,6 +143,12 @@ const priorHurdlesFixture = (base, version) => {
     return { ...payload, checksum: createHash("sha256").update(JSON.stringify(ordered(payload))).digest("hex") };
   };
   const replay = structuredClone(base);
+  // These fixtures test profile routing at the start pose. The real v4
+  // recording above keeps every sample through automatic completion.
+  replay.keyframes = replay.keyframes.slice(0, 2);
+  assert.equal(replay.keyframes.length, 2);
+  replay.durationTicks = replay.keyframes.at(-1).tick;
+  replay.commands = replay.commands.filter(({ command }) => command.tick <= replay.durationTicks);
   replay.title = `Synthetic Hurdles browser profile v${version}`;
   replay.arena.profileId = `classic31-provisional-super-hurdles-play-v${version}`;
   if (version <= 2) {
@@ -466,9 +472,11 @@ try {
           const data = priorHurdlesFixture(replay, version);
           await page.locator("#motion-open-input").setInputFiles({ name: "compatibility.bamz-replay.json", mimeType: "application/json", buffer: Buffer.from(data) });
         }
+        // Camera controls are disabled until validation, storage and refresh
+        // complete. Use normal actionability before inspecting the new title.
+        await page.locator('button[data-motion-camera="camera-3"]').click();
         await expect(page.locator("#motion-replay-title")).toHaveText(version === 4 ? title : `Synthetic Hurdles browser profile v${version}`);
         await page.locator("#motion-timeline").press("Home");
-        await page.locator('button[data-motion-camera="camera-3"]').click();
         await expect(page.locator("#motion-timeline")).toHaveValue("0");
         reportProgress(`Hurdles profile v${version}: rendered geometry comparison`);
         if (version === 1) {
