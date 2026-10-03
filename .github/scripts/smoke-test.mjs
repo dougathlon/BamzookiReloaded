@@ -12,8 +12,8 @@ const { expect } = require("playwright/test");
 const { default: AxeBuilder } = require("@axe-core/playwright");
 const engine = process.env.BROWSER_TEST_ENGINE ?? "chromium";
 assert.ok(["chromium", "firefox", "webkit"].includes(engine), "Unsupported browser test engine");
-const suite = process.env.BROWSER_TEST_SUITE ?? "journey";
-assert.ok(["journey", "trial-focus"].includes(suite), "Unsupported browser test suite");
+const suite = process.env.BROWSER_TEST_SUITE;
+assert.ok(["contests", "editor", "trial-focus"].includes(suite), "Unsupported browser test suite");
 const output = path.resolve(process.env.BROWSER_TEST_OUTPUT ?? "browser-results");
 const site = await realpath("site");
 const prefix = "/BamzookiReloaded/";
@@ -519,7 +519,7 @@ const startBoundsDrag = async (model, partId, axis, increase = 0.5) => {
   await expect.poll(async () => Math.abs(Number(await input.inputValue()) - part.shape[dimensions[axis]] - increase)).toBeLessThan(0.03);
 };
 
-const playJourney = async () => {
+const prepareLibraryJourney = async () => {
   await attachmentFocusPreflight();
   await page.goto(`${origin}${prefix}`);
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
@@ -685,7 +685,10 @@ const playJourney = async () => {
   await expect(page.locator("#loader-preview canvas")).toHaveCount(0);
   assert.equal(await exportZook(), originalBytes);
   recordCheck("Loader Hologram: saved selection renders its own geometry without opening, source/module/close disposal and preserved editor bytes");
+  return { originalBytes, changedCopyBytes };
+};
 
+const contestReplayJourney = async ({ originalBytes }) => {
   await module("simulator");
   const savedZook = page.locator("#simulator-zook-1 option").filter({ hasText: "Tutorial Walker — My Zooks (9 parts)" });
   await expect(savedZook).toHaveCount(1);
@@ -838,7 +841,11 @@ const playJourney = async () => {
   await module("motion-player");
   await expect(page.locator("#motion-replay-library option")).toHaveCount(7);
   recordCheck("Replay library survives a browser-page reload");
+  await reopenSavedOriginal(originalBytes);
+  recordCheck("Contest/replay handoff: return to Zook Kit opens the byte-identical saved original");
+};
 
+const reopenSavedOriginal = async (originalBytes) => {
   await module("zook-kit");
   await page.locator("#loader-command").click();
   await page.getByRole("button", { name: "My Zooks", exact: true }).click();
@@ -848,6 +855,11 @@ const playJourney = async () => {
   await page.locator("#loader-open").click();
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), originalBytes);
+  return storedOriginal;
+};
+
+const editorFileJourney = async ({ originalBytes, changedCopyBytes }) => {
+  const storedOriginal = await reopenSavedOriginal(originalBytes);
   await page.getByLabel("Width", { exact: true }).fill("0.81");
   const modifiedBytes = await exportZook();
   await fileCommand("New");
@@ -1215,7 +1227,13 @@ const playJourney = async () => {
 
 try {
   if (suite === "trial-focus") await trialFocusJourney();
-  else await playJourney();
+  else {
+    const library = await prepareLibraryJourney();
+    if (suite === "contests") await contestReplayJourney(library);
+    else await editorFileJourney(library);
+  }
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3 }[suite], "Every suite check must execute");
+  assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {

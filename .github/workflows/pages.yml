@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-        suite: [journey, trial-focus]
+        suite: [contests, editor, trial-focus]
     steps:
       - name: Check out static distribution
         uses: actions/checkout@v7
