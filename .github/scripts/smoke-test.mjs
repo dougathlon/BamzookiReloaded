@@ -1562,7 +1562,7 @@ const browserRecoveryJourney = async () => {
     // focus outlines only from this camera comparison; full-page shots retain them.
     return createHash("sha256").update(await page.locator("#game-canvas").screenshot({
       path: path.join(output, `${engine}-input-camera-${name}.png`),
-      style: ".chrome { visibility: hidden !important; }",
+      style: ".chrome { display: none !important; }",
     })).digest("hex");
   };
   const hold = async key => {
