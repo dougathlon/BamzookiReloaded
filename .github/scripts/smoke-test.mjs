@@ -1393,6 +1393,19 @@ const storageJourney = async () => {
     recordCheck("Storage repair race: an ordinary second-tab Save invalidates the repair snapshot without any partial write");
     await refresh(page);
     await page.locator("#loader-repair").click();
+    await page.evaluate(() => {
+      const original = crypto.subtle.digest;
+      crypto.subtle.digest = function () {
+        crypto.subtle.digest = original;
+        return Promise.reject(new TypeError("Simulated unavailable verification"));
+      };
+    });
+    await page.locator("#loader-repair-confirm-button").click();
+    await expect(page.locator("#loader-announcement")).toHaveText("Could not verify local Zooks. Nothing was repaired; try again.");
+    assert.deepEqual(await records(), beforeRepair, "A failed digest is not evidence of corrupt stored data");
+    recordCheck("Storage verification failure: an unavailable digest preserves every record instead of treating it as corrupt");
+    await refresh(page);
+    await page.locator("#loader-repair").click();
     await page.locator("#loader-repair-confirm-button").click();
     await expect(page.locator("#loader-announcement")).toContainText("Rebuilt 1 recoverable index record");
     const repaired = await records();
@@ -1460,7 +1473,7 @@ try {
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 9 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
