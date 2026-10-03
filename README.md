@@ -23,6 +23,8 @@ The Loader's **Sort** menu can rank each of the five trials. Historical metadata
 
 The six historical example names retain their recovered catalog metadata, but their original bodies are not decoded. Gameplay marked **Provisional Play Mode** uses reconstruction rules and physics, not historically verified results. Legacy `.Zook` and `.bvz` files are not supported imports. Browser exports use distinct modern formats.
 
+**Hologram** displays a static 3D construction preview in Passport and for validated **My Zooks** saves. Previewing a saved creature does not open it or change your current design. Camera, lighting and static pose are reconstruction choices; undecoded original examples do not receive invented previews.
+
 ## Disclaimer
 
 This is an unofficial, non-commercial educational reconstruction, not affiliated with, endorsed by, or sponsored by the BBC, CBBC, Gameware, or the original creators. Original names and trademarks belong to their respective owners and identify the software being studied. This release contains newly implemented browser code, procedural visuals, and separately licensed open-source runtime dependencies; it does not distribute the original installers, executable program code, or extracted artwork. No claim of exact historical fidelity is made.

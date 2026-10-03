@@ -79,6 +79,22 @@ const exportZook = async () => {
   for await (const chunk of stream) chunks.push(chunk);
   return Buffer.concat(chunks).toString("utf8");
 };
+const hologramPixels = async (panel, name, parts) => {
+  const preview = panel.locator(".zook-hologram");
+  await expect(preview).toHaveAttribute("data-hologram-state", "ready");
+  const canvas = preview.getByRole("img", { name: `3D construction preview of ${name}, ${parts} ${parts === 1 ? "part" : "parts"}`, exact: true });
+  await expect(canvas).toBeVisible();
+  const pixels = await canvas.evaluate((element) => {
+    const data = element.getContext("2d").getImageData(0, 0, element.width, element.height).data;
+    const colors = new Set();
+    for (let index = 0; index < data.length; index += 16) colors.add(`${data[index]},${data[index + 1]},${data[index + 2]}`);
+    return { width: element.width, height: element.height, colors: colors.size, png: element.toDataURL() };
+  });
+  assert.equal(pixels.width, 512);
+  assert.equal(pixels.height, 384);
+  assert.ok(pixels.colors > 50, "Hologram must contain rendered geometry, not an empty canvas");
+  return createHash("sha256").update(pixels.png).digest("hex");
+};
 
 // Test-only fixtures start from a canonical export. Added scores are integers;
 // all other numeric values already have the export's canonical precision.
@@ -137,6 +153,37 @@ try {
 
   const originalBytes = await exportZook();
   const original = JSON.parse(originalBytes);
+  await page.locator("#passport-command").click();
+  await page.locator("#passport-tab-hologram").click();
+  const passportPixels = await hologramPixels(page.locator("#passport-panel"), "Tutorial Walker", 9);
+  await page.locator("#passport-tab-hologram").press("Tab");
+  await expect(page.locator("#passport-panel")).toBeFocused();
+  await accessibility("Passport Hologram");
+  await shot("passport-hologram");
+  for (let index = 0; index < 3; index += 1) {
+    await page.locator("#passport-tab-history").click();
+    await expect(page.locator("#passport-panel canvas")).toHaveCount(0);
+    await page.locator("#passport-tab-hologram").click();
+    assert.equal(await hologramPixels(page.locator("#passport-panel"), "Tutorial Walker", 9), passportPixels);
+  }
+  await page.locator("#passport-tab-history").click();
+  await page.evaluate(() => {
+    const original = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function (...args) {
+      CanvasRenderingContext2D.prototype.drawImage = original;
+      throw new Error("Simulated Hologram copy failure");
+    };
+  });
+  await page.locator("#passport-tab-hologram").click();
+  await expect(page.locator("#passport-panel .zook-hologram")).toHaveAttribute("data-hologram-state", "error");
+  await expect(page.locator("#passport-panel")).toContainText("the Zook is unchanged");
+  await page.locator("#passport-tab-hologram").click();
+  assert.equal(await hologramPixels(page.locator("#passport-panel"), "Tutorial Walker", 9), passportPixels);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#passport-command")).toBeFocused();
+  await expect(page.locator("#passport-panel canvas")).toHaveCount(0);
+  assert.equal(await exportZook(), originalBytes);
+  checks.push("Passport Hologram: bounded rendered pixels, keyboard focus, repeatable tab disposal, copy-failure recovery and unchanged canonical bytes");
   await fileCommand("Save As");
   await expect(page.locator("#save-as-name")).toBeFocused();
   await accessibility("Save As");
@@ -198,6 +245,28 @@ try {
   await page.locator("#loader-open").click();
   assert.equal(await exportZook(), originalBytes);
   checks.push("Save As: reversible name, independent subsequent Save, two-entry reload and byte-identical original");
+
+  await page.locator("#loader-command").click();
+  await page.locator("#loader-tab-hologram").click();
+  const savedPixels = await hologramPixels(page.locator("#loader-preview"), "Tutorial Walker", 9);
+  await accessibility("Saved Zook Hologram");
+  await shot("loader-hologram");
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Tutorial Walker copy" }).click();
+  assert.notEqual(await hologramPixels(page.locator("#loader-preview"), "Tutorial Walker copy", 9), savedPixels);
+  await page.getByRole("button", { name: "Examples", exact: true }).click();
+  await expect(page.locator("#loader-preview")).toContainText("legacy Zook body is not decoded");
+  await expect(page.locator("#loader-preview canvas")).toHaveCount(0);
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Tutorial Walker" }).filter({ hasNotText: "copy" }).click();
+  assert.equal(await hologramPixels(page.locator("#loader-preview"), "Tutorial Walker", 9), savedPixels);
+  await module("motion-player");
+  await expect(page.locator("#loader-preview canvas")).toHaveCount(0);
+  await module("zook-kit");
+  await hologramPixels(page.locator("#loader-preview"), "Tutorial Walker", 9);
+  await page.locator("#loader-close").click();
+  await expect(page.locator("#loader-preview canvas")).toHaveCount(0);
+  assert.equal(await exportZook(), originalBytes);
+  checks.push("Loader Hologram: saved selection renders its own geometry without opening, source/module/close disposal and preserved editor bytes");
 
   await module("simulator");
   const savedZook = page.locator("#simulator-zook-1 option").filter({ hasText: "Tutorial Walker — My Zooks (9 parts)" });
