@@ -39,7 +39,8 @@ jobs:
           BROWSER_TEST_RUNTIME: ${{ runner.temp }}/browser-check
           BROWSER_TEST_ENGINE: ${{ matrix.browser }}
           BROWSER_TEST_OUTPUT: ${{ runner.temp }}/browser-results
-        run: node .github/scripts/smoke-test.mjs
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run --auto-servernum node .github/scripts/smoke-test.mjs
 
       - name: Retain public-game screenshots and test summary
         if: always()

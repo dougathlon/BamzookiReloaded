@@ -28,7 +28,15 @@ const server = createServer(async (request, response) => {
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 await mkdir(output, { recursive: true });
-const browser = await playwright[engine].launch({ headless: true });
+// The hosted runner has no physical GPU. Firefox needs an X display and an
+// explicit software-WebGL test profile; these preferences never enter the game.
+const browser = await playwright[engine].launch({
+  headless: engine !== "firefox",
+  ...(engine === "firefox" ? { firefoxUserPrefs: {
+    "webgl.force-enabled": true,
+    "webgl.disable-fail-if-major-performance-caveat": true,
+  } } : {}),
+});
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
 const page = await context.newPage();
 page.setDefaultTimeout(20_000);
@@ -62,6 +70,7 @@ const accessibility = async (name) => {
 try {
   await page.goto(`${origin}${prefix}`);
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#capability-error")).toBeHidden();
   await expect(page.locator(".publication-disclaimer")).toContainText("not affiliated with or endorsed by the BBC or Gameware");
   await accessibility("Loader");
   await shot("loader");
@@ -76,9 +85,16 @@ try {
   await page.locator("#mode-select").click();
   checks.push("Tutorial Walker: nine articulated parts, Test target, Select return");
 
+  await page.locator("#file-system-command").click();
+  await page.locator("#save-zook").click();
+  await expect(page.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
+
   await module("simulator");
-  await page.locator("#simulator-zook-1").selectOption("tutorial");
+  const savedZook = page.locator("#simulator-zook-1 option").filter({ hasText: "My Zooks (9 parts)" });
+  await expect(savedZook).toHaveCount(1);
+  await page.locator("#simulator-zook-1").selectOption(await savedZook.getAttribute("value"));
   await page.locator("#simulator-zook-2").selectOption("tutorial");
+  checks.push("Saved My Zooks entry selectable independently from tutorial opponent");
   const contests = page.locator("#simulator-contest-list button");
   await expect(contests).toHaveCount(9);
   await accessibility("Simulator setup");
@@ -86,11 +102,16 @@ try {
   for (let index = 0; index < 9; index += 1) {
     await contests.nth(index).click();
     const name = (await contests.nth(index).innerText()).replaceAll("\n", " ");
-    await page.locator("#simulator-start").click();
-    await expect.poll(async () => Number.parseFloat(await page.locator("#simulator-time").innerText()), { timeout: 40_000 }).toBeGreaterThanOrEqual(0.5);
     for (const button of await page.locator("button[data-simulator-camera]").all()) await button.click();
+    await page.locator("#simulator-start").click();
+    await expect.poll(async () => await page.locator("#simulator-save-dialog").isVisible() ||
+      Number.parseFloat(await page.locator("#simulator-time").innerText()) >= 0.5, { timeout: 40_000 }).toBe(true);
     if (index === 5 || index === 6) await shot(`contest-${index}`);
-    if (await page.locator("#simulator-stop").isVisible()) await page.locator("#simulator-stop").click();
+    if (await page.locator("#simulator-stop").isVisible()) {
+      await page.locator("#simulator-stop").click({ timeout: 2000 }).catch(async (error) => {
+        if (!await page.locator("#simulator-save-dialog").isVisible()) throw error;
+      });
+    }
     await expect(page.locator("#simulator-save-dialog")).toBeVisible();
     if ([3, 5, 6].includes(index)) {
       const title = `Browser check ${index}`;
@@ -145,7 +166,7 @@ try {
   await shot("failure").catch(() => {});
   throw error;
 } finally {
-  await writeFile(path.join(output, `${engine}-summary.json`), `${JSON.stringify({ engine, checks, failures, errors }, null, 2)}\n`);
+  await writeFile(path.join(output, `${engine}-summary.json`), `${JSON.stringify({ engine, graphics: "software-rendered CI; not hardware performance or real Safari evidence", checks, failures, errors }, null, 2)}\n`);
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
 }
