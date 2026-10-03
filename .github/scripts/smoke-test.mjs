@@ -44,6 +44,14 @@ page.setDefaultTimeout(20_000);
 const failures = [];
 const checks = [];
 const errors = [];
+const journeyStartedAt = Date.now();
+const reportProgress = (stage) => console.log(
+  `${engine}: ${stage}; ${checks.length} completed checks; ${Math.round((Date.now() - journeyStartedAt) / 1000)}s elapsed`,
+);
+const recordCheck = (name) => {
+  checks.push(name);
+  reportProgress(name);
+};
 page.on("pageerror", (error) => errors.push(error.message));
 page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
 page.on("response", (response) => {
@@ -55,17 +63,22 @@ await context.route("**/*", (route) => {
   errors.push("Unexpected external network request");
   return route.abort();
 });
-const shot = (name) => page.screenshot({ path: path.join(output, `${engine}-${name}.png`), fullPage: true });
+const shot = async (name) => {
+  reportProgress(`Screenshot ${name}: start`);
+  await page.screenshot({ path: path.join(output, `${engine}-${name}.png`), fullPage: true });
+  reportProgress(`Screenshot ${name}: saved`);
+};
 const module = async (name) => {
   await page.locator("#modules-command").click();
   await page.locator(`#module-launcher [data-suite-module="${name}"]`).click();
   await expect(page.locator(".shell")).toHaveAttribute("data-module", name);
 };
 const accessibility = async (name) => {
+  reportProgress(`${name}: accessibility start`);
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   const violations = results.violations.map(({ id, impact, nodes }) => ({ id, impact, targets: nodes.map(({ target }) => target) }));
   assert.deepEqual(violations, [], `${name} accessibility checks`);
-  checks.push(`${name}: automated accessibility`);
+  recordCheck(`${name}: automated accessibility`);
 };
 const fileCommand = async (name) => {
   await page.locator("#file-system-command").click();
@@ -176,9 +189,9 @@ try {
   await page.locator("#loader-tab-achievement").click();
   await expect(page.locator("#loader-preview dt")).toHaveText(["Sprint", "Block-Push", "Hurdles", "High jump", "Lap"]);
   await expect(page.locator("#loader-preview")).toContainText("Confirmed shipped example table");
-  checks.push("Examples: confirmed source-table boundary and exact five-trial order/spelling");
+  recordCheck("Examples: confirmed source-table boundary and exact five-trial order/spelling");
   await page.locator("#loader-sort").selectOption("original");
-  checks.push("Loader: all five historical result orders, retained selection and sorted keyboard navigation");
+  recordCheck("Loader: all five historical result orders, retained selection and sorted keyboard navigation");
   await page.locator("#loader-tutorial").click();
   await expect(page.locator("#part-summary")).toHaveText("9 parts");
   await page.locator("#mode-test").click();
@@ -188,7 +201,7 @@ try {
   await expect(page.locator("#test-target-value")).not.toHaveText("Not placed");
   await shot("tutorial-test");
   await page.locator("#mode-select").click();
-  checks.push("Tutorial Walker: nine articulated parts, Test target, Select return");
+  recordCheck("Tutorial Walker: nine articulated parts, Test target, Select return");
 
   await page.locator("#file-system-command").click();
   await page.locator("#save-zook").click();
@@ -226,7 +239,7 @@ try {
   await expect(page.locator("#passport-command")).toBeFocused();
   await expect(page.locator("#passport-panel canvas")).toHaveCount(0);
   assert.equal(await exportZook(), originalBytes);
-  checks.push("Passport Hologram: bounded rendered pixels, keyboard focus, repeatable tab disposal, copy-failure recovery and unchanged canonical bytes");
+  recordCheck("Passport Hologram: bounded rendered pixels, keyboard focus, repeatable tab disposal, copy-failure recovery and unchanged canonical bytes");
   await fileCommand("Save As");
   await expect(page.locator("#save-as-name")).toBeFocused();
   await accessibility("Save As");
@@ -237,7 +250,7 @@ try {
   await page.keyboard.press("Escape");
   await expect(page.locator("#file-system-command")).toBeFocused();
   assert.equal(await exportZook(), originalBytes);
-  checks.push("Save As: keyboard focus, unchanged-name rejection and byte-identical cancellation");
+  recordCheck("Save As: keyboard focus, unchanged-name rejection and byte-identical cancellation");
 
   await fileCommand("Save As");
   await page.locator("#save-as-name").fill("Failed copy");
@@ -256,7 +269,7 @@ try {
   await expect(page.locator("#save-as-name")).toBeFocused();
   await page.locator("#save-as-cancel").click();
   assert.equal(await exportZook(), originalBytes);
-  checks.push("Save As: interrupted storage leaves canonical editor bytes and original record intact");
+  recordCheck("Save As: interrupted storage leaves canonical editor bytes and original record intact");
 
   await fileCommand("Save As");
   await page.locator("#save-as-name").fill("Tutorial Walker copy");
@@ -287,7 +300,7 @@ try {
   await page.locator("#loader-list [role=option]").filter({ hasText: "Tutorial Walker" }).filter({ hasNotText: "copy" }).click();
   await page.locator("#loader-open").click();
   assert.equal(await exportZook(), originalBytes);
-  checks.push("Save As: reversible name, independent subsequent Save, two-entry reload and byte-identical original");
+  recordCheck("Save As: reversible name, independent subsequent Save, two-entry reload and byte-identical original");
 
   await page.locator("#loader-command").click();
   await page.locator("#loader-tab-hologram").click();
@@ -309,14 +322,14 @@ try {
   await page.locator("#loader-close").click();
   await expect(page.locator("#loader-preview canvas")).toHaveCount(0);
   assert.equal(await exportZook(), originalBytes);
-  checks.push("Loader Hologram: saved selection renders its own geometry without opening, source/module/close disposal and preserved editor bytes");
+  recordCheck("Loader Hologram: saved selection renders its own geometry without opening, source/module/close disposal and preserved editor bytes");
 
   await module("simulator");
   const savedZook = page.locator("#simulator-zook-1 option").filter({ hasText: "Tutorial Walker — My Zooks (9 parts)" });
   await expect(savedZook).toHaveCount(1);
   await page.locator("#simulator-zook-1").selectOption(await savedZook.getAttribute("value"));
   await page.locator("#simulator-zook-2").selectOption("tutorial");
-  checks.push("Saved My Zooks entry selectable independently from tutorial opponent");
+  recordCheck("Saved My Zooks entry selectable independently from tutorial opponent");
   const contests = page.locator("#simulator-contest-list button");
   await expect(contests).toHaveCount(9);
   await accessibility("Simulator setup");
@@ -343,7 +356,7 @@ try {
     } else await page.locator("#simulator-dont-save").click();
     await expect(page.locator("#simulator-save-dialog")).toBeHidden();
     await expect(page.locator("#simulator-start")).toBeEnabled();
-    checks.push(`${name}: countdown, live physics, four cameras, Stop, save/discard`);
+    recordCheck(`${name}: countdown, live physics, four cameras, Stop, save/discard`);
   }
 
   await module("motion-player");
@@ -374,14 +387,14 @@ try {
     assert.ok(replay.durationTicks >= 30);
     assert.ok(replay.keyframes.every((frame) => frame.arenaPoses.length === count));
     assert.notDeepEqual(replay.keyframes.at(-1).arenaPoses, replay.keyframes[0].arenaPoses);
-    checks.push(`${title}: persisted arena replay, transport, scrub, cameras, complete exported object tracks`);
+    recordCheck(`${title}: persisted arena replay, transport, scrub, cameras, complete exported object tracks`);
   }
   await accessibility("Motion Player");
   await page.reload();
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
   await module("motion-player");
   await expect(page.locator("#motion-replay-library option")).toHaveCount(3);
-  checks.push("Replay library survives a browser-page reload");
+  recordCheck("Replay library survives a browser-page reload");
 
   await module("zook-kit");
   await page.locator("#loader-command").click();
@@ -416,7 +429,7 @@ try {
   await expect(page.locator("#loader-new")).toBeFocused();
   await page.locator("#loader-close").click();
   assert.equal(await exportZook(), modifiedBytes);
-  checks.push("New: focused naming, invalid-name recovery and byte-identical cancellation at both prompts");
+  recordCheck("New: focused naming, invalid-name recovery and byte-identical cancellation at both prompts");
 
   await fileCommand("New");
   await page.evaluate(() => {
@@ -436,7 +449,7 @@ try {
   await page.locator("#loader-replace-cancel").click();
   await page.locator("#loader-close").click();
   assert.equal(await exportZook(), modifiedBytes);
-  checks.push("Save before New: storage failure prevents replacement and preserves dirty canonical bytes");
+  recordCheck("Save before New: storage failure prevents replacement and preserves dirty canonical bytes");
 
   await page.getByLabel("Width", { exact: true }).fill("0.82");
   const savedBeforeOpen = await exportZook();
@@ -453,7 +466,7 @@ try {
   await page.locator("#loader-open").click();
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), savedBeforeOpen);
-  checks.push("Save before Open: original saved in place and captured copy target preserved through library refresh");
+  recordCheck("Save before Open: original saved in place and captured copy target preserved through library refresh");
 
   await page.getByLabel("Width", { exact: true }).fill("0.83");
   const beforeFailedOpen = await exportZook();
@@ -467,7 +480,7 @@ try {
   assert.equal(await exportZook(), beforeFailedOpen);
   await page.locator("#undo-command").click();
   assert.equal(await exportZook(), savedBeforeOpen);
-  checks.push("Open: invalid import after Don't Save preserves current bytes and undo history");
+  recordCheck("Open: invalid import after Don't Save preserves current bytes and undo history");
 
   await page.getByLabel("Width", { exact: true }).fill("0.84");
   const savedBeforeNew = await exportZook();
@@ -499,7 +512,7 @@ try {
   await page.locator("#loader-open").click();
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), savedBeforeNew);
-  checks.push("New: save-then-cancel retains current Zook; normalized named creation saves separately and survives reload");
+  recordCheck("New: save-then-cancel retains current Zook; normalized named creation saves separately and survives reload");
 
   const result = (trialKey, value, unit = "cm/sec", resultClass = "provisional-play") => ({ trialKey, value, unit, resultClass });
   const fixtures = [
@@ -591,7 +604,7 @@ try {
   await page.locator("#loader-open").click();
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), savedFixtureBytes);
-  checks.push("My Zooks: saved/reloaded score sets, stable selection and refresh, source reset, wrong-unit/class/version exclusion, forged-index rejection, held-validation Open guard and unchanged canonical bytes");
+  recordCheck("My Zooks: saved/reloaded score sets, stable selection and refresh, source reset, wrong-unit/class/version exclusion, forged-index rejection, held-validation Open guard and unchanged canonical bytes");
 
   await page.locator("#passport-command").click();
   await page.locator("#passport-tab-achievement").click();
@@ -605,7 +618,7 @@ try {
   await shot("passport-conflicting-records");
   await page.locator("#passport-close").click();
   assert.equal(await exportZook(), savedFixtureBytes);
-  checks.push("Passport: wrong-unit/class/negative records remain uninterpreted; future records and canonical bytes preserved");
+  recordCheck("Passport: wrong-unit/class/negative records remain uninterpreted; future records and canonical bytes preserved");
 
   await page.locator("#loader-command").click();
   await page.locator("#loader-list [role=option]").filter({ hasText: "Sort Alpha" }).click();
@@ -636,7 +649,7 @@ try {
   await page.keyboard.press("Escape");
   await expect(page.locator("#passport-command")).toBeFocused();
   assert.equal(await exportZook(), declaredBytes);
-  checks.push("Passport: declared creation/lineage and separated result versions are never authenticated; canonical exports unchanged");
+  recordCheck("Passport: declared creation/lineage and separated result versions are never authenticated; canonical exports unchanged");
 
   await page.reload();
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
@@ -662,7 +675,7 @@ try {
     assert.equal(await exportZook(), committed);
     await page.locator("#undo-command").click();
   }
-  checks.push("Bounds reshape: all three root axes, synchronized preview, one-command Undo and byte-identical Redo");
+  recordCheck("Bounds reshape: all three root axes, synchronized preview, one-command Undo and byte-identical Redo");
   for (const cancellation of ["escape", "focus", "capture", "resize"]) {
     const canvas = page.locator("#game-canvas");
     await canvas.evaluate(element => element.addEventListener("pointerdown", event => {
@@ -679,7 +692,7 @@ try {
     assert.equal(await exportZook(), rootBefore);
     if (cancellation === "resize") await page.setViewportSize({ width: 1280, height: 900 });
   }
-  checks.push("Bounds reshape: Escape, external focus, actual capture loss and resize cancel without changing canonical bytes");
+  recordCheck("Bounds reshape: Escape, external focus, actual capture loss and resize cancel without changing canonical bytes");
   await page.locator("#mode-add").click();
   await page.getByRole("button", { name: "Left", exact: true }).click();
   await page.locator("#mode-add").click();
@@ -711,7 +724,7 @@ try {
   await page.locator("#redo-command").click();
   assert.equal(await exportZook(), nestedAfter);
   await accessibility("Bounds reshape editor");
-  checks.push("Bounds reshape: rotated nested mirror partners, unchanged transforms/paths and exact Undo/Redo");
+  recordCheck("Bounds reshape: rotated nested mirror partners, unchanged transforms/paths and exact Undo/Redo");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {

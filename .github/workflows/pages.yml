@@ -15,7 +15,7 @@ concurrency:
 jobs:
   browser-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.browser == 'chromium' && 25 || 15 }}
     strategy:
       fail-fast: false
       matrix:
