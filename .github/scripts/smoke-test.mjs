@@ -391,6 +391,9 @@ try {
       });
     }
     await expect(page.locator("#simulator-save-dialog")).toBeVisible();
+    await expect(page.locator("#simulator-replay-name")).toHaveValue(
+      `${name.replace(/ Round [12]$/, "")} — Tutorial Walker Vs Tutorial Walker`,
+    );
     if ([3, 5, 6, 8].includes(index)) {
       const title = `Browser check ${index}`;
       await page.locator("#simulator-replay-name").fill(title);
