@@ -1554,23 +1554,29 @@ const browserRecoveryJourney = async () => {
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await expect(settingsCommand).toBeFocused();
 
-  const cameraPixels = async () => {
+  const cameraPixels = async name => {
     await page.locator("#modules-command").focus();
     await page.locator("#modules-command").hover();
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    return createHash("sha256").update(await page.locator("#game-canvas").screenshot()).digest("hex");
+    // The canvas rectangle also contains DOM controls. Exclude their changing
+    // focus outlines only from this camera comparison; full-page shots retain them.
+    return createHash("sha256").update(await page.locator("#game-canvas").screenshot({
+      path: path.join(output, `${engine}-input-camera-${name}.png`),
+      style: ".chrome { visibility: hidden !important; }",
+    })).digest("hex");
   };
   const hold = async key => {
     await page.keyboard.down(key);
     try { await page.waitForTimeout(300); } finally { await page.keyboard.up(key); }
   };
-  const cameraBefore = await cameraPixels();
-  await hold("w");
-  assert.equal(await cameraPixels(), cameraBefore, "Replaced W binding must not move the camera");
-  await hold("i");
-  assert.notEqual(await cameraPixels(), cameraBefore, "Remapped I binding must visibly move the camera");
   await page.keyboard.press("Home");
-  assert.equal(await cameraPixels(), cameraBefore, "Historical Home must still restore the exact camera");
+  const cameraBefore = await cameraPixels("home");
+  await hold("w");
+  assert.equal(await cameraPixels("replaced-w"), cameraBefore, "Replaced W binding must not move the camera");
+  await hold("i");
+  assert.notEqual(await cameraPixels("remapped-i"), cameraBefore, "Remapped I binding must visibly move the camera");
+  await page.keyboard.press("Home");
+  assert.equal(await cameraPixels("reset"), cameraBefore, "Historical Home must still restore the exact camera");
   await page.locator("#mode-test").click();
   await expect(page.locator("#test-pose-value")).toHaveText("Grounded");
   await page.keyboard.press("Space");
