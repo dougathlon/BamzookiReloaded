@@ -19,13 +19,21 @@ export function assertPublicText(text, relative) {
     /(?:\/Users\/|\/home\/)[^/\s]+\//,
     /[A-Z]:\\(?:Users|Documents and Settings)\\/i,
     /reference[\\/](?:extracted|manifests|private-pack|private-analysis)/i,
-    /(?:\.git-local|PROJECT_STATE\.md|BAMZOOKI_BROWSER_RECONSTRUCTION_GOAL)/,
-    /(?:__BAMZOOKI_DIAGNOSTICS__|__BAMZOOKI_PERFORMANCE__|private-textures\/|private-visuals\/)/,
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
     /(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{60,}|sk-proj-[A-Za-z0-9_-]{40,})/,
   ];
   if (forbidden.some((pattern) => pattern.test(text))) {
     throw new Error(`Public release contains a forbidden source, diagnostic, or personal marker: ${relative}`);
+  }
+  // The verifier necessarily names these markers in its own rejection rules.
+  // Only that marker family is exempt there; paths, keys and tokens never are.
+  const developmentMarkers = [
+    /(?:\.git-local|PROJECT_STATE\.md|BAMZOOKI_BROWSER_RECONSTRUCTION_GOAL)/,
+    /(?:__BAMZOOKI_DIAGNOSTICS__|__BAMZOOKI_PERFORMANCE__|private-textures\/|private-visuals\/)/,
+  ];
+  if (relative !== ".github/scripts/verify-release.mjs" &&
+      developmentMarkers.some((pattern) => pattern.test(text))) {
+    throw new Error(`Public release contains a forbidden development marker: ${relative}`);
   }
 }
 
@@ -68,7 +76,7 @@ export async function auditPublicRelease(root, { allowPreviousRelease = false } 
       throw new Error(`Public release integrity mismatch: ${entry.path}`);
     }
     totalBytes += bytes.length;
-    if (entry.path !== ".github/scripts/verify-release.mjs" && !entry.path.endsWith(".wasm")) {
+    if (!entry.path.endsWith(".wasm")) {
       assertPublicText(bytes.toString("utf8"), entry.path);
     }
   }

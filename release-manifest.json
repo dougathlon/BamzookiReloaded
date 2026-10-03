@@ -3,13 +3,13 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 55805,
-      "sha256": "3a71acccaf3a1c98ea482e44a5a98cfc7a4e5a301e40aeb1845551d9a545c1c6"
+      "bytes": 55789,
+      "sha256": "7571f16ae902ec96c64486dadf37e68d6fc05ee05d543f3b3933672b2a698085"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
-      "bytes": 4775,
-      "sha256": "d0381a88518605b53cb8d06ae1c64e627a3464851114fbe6e6aacfa14cd1d771"
+      "bytes": 5135,
+      "sha256": "3ea63dbf7c2c9b8fd9c2334b43d23e9656cf152ed377ae15db5692a45f1963ad"
     },
     {
       "path": ".github/workflows/pages.yml",
@@ -27,19 +27,19 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "path": "site/assets/index-DgKdl_Rp.css",
-      "bytes": 31829,
-      "sha256": "66a032077c08d0a8786363cfd403fdf15c304c5e9ea8e8ed6bd6534468ad6420"
+      "path": "site/assets/index-Bx6LPMQ5.css",
+      "bytes": 31888,
+      "sha256": "bd98b76571d50ba2dacaf93b5632aa02ca2d7caf7f2d1f4ac2931416c636a56f"
     },
     {
-      "path": "site/assets/index-xhOBaGpx.js",
+      "path": "site/assets/index-CY7woCAX.js",
       "bytes": 3857316,
       "sha256": "ad9a9804d7fd72b0cc5e4641cdaf72079e3ad282cffb57f0110b8cbde1615b40"
     },
     {
       "path": "site/index.html",
       "bytes": 52637,
-      "sha256": "4edc0977f1de77c399a6b8c0baa1f67a9355127419317df3bfca78232727ebb1"
+      "sha256": "280fd59b200f1777515859c02da5e89012ee0324363451963f4cf0e68cd98ffc"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",

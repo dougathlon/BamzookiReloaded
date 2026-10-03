@@ -110,13 +110,13 @@ const cameraGestures = async (kind) => {
   const simulator = kind === "simulator";
   const canvas = page.locator(simulator ? "#simulator-arena-canvas" : "#motion-canvas");
   const previews = page.locator(simulator ? "#simulator-camera-preview-canvas" : "#motion-camera-preview-canvas");
-  const heading = page.locator(simulator ? "#simulator-title" : "#motion-player-title");
+  const neutralControl = page.locator("#modules-command");
   const button = (id) => page.locator(`[data-${simulator ? "simulator" : "motion"}-camera="camera-${id}"]`);
   const pixels = async (element) => {
     // Compare the same focus/hover state; the canvas focus ring and miniature
     // button overlays are intentional accessibility UI, not camera movement.
-    await heading.focus();
-    await heading.hover();
+    await neutralControl.focus();
+    await neutralControl.hover();
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     return createHash("sha256").update(await element.screenshot()).digest("hex");
   };
