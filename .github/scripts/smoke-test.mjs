@@ -1046,7 +1046,7 @@ try {
   assert.equal(await exportZook(), nestedAfter, "Undo must restore exact branch bytes after Delete");
   recordCheck("Branch actions: visible keyboard focus after Mirror, Copy and Delete; cancelled Copy and undone Delete preserve exact bytes");
   await page.locator("#part-select").selectOption("p0003");
-  await page.locator("#motion-mode").selectOption("single");
+  await page.locator("#motion-mode").selectOption({ label: "Single part movement" });
   await keyboardActivate(page.locator("#tutorial-triangle"));
   await expect(page.locator("#motion-point-select option")).toHaveCount(3);
   await page.locator("#motion-point-x").fill("0.2");
