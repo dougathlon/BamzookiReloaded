@@ -236,6 +236,124 @@ try {
   await module("motion-player");
   await expect(page.locator("#motion-replay-library option")).toHaveCount(3);
   checks.push("Replay library survives a browser-page reload");
+
+  await module("zook-kit");
+  await page.locator("#loader-command").click();
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  const storedOriginal = () => page.locator("#loader-list [role=option]")
+    .filter({ hasText: "Tutorial Walker" }).filter({ hasNotText: "copy" });
+  await storedOriginal().click();
+  await page.locator("#loader-open").click();
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  assert.equal(await exportZook(), originalBytes);
+  await page.getByLabel("Width", { exact: true }).fill("0.81");
+  const modifiedBytes = await exportZook();
+  await fileCommand("New");
+  await expect(page.locator("#loader-replace-cancel")).toBeFocused();
+  await accessibility("Save before New or Open");
+  await shot("save-before-replace");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#loader-new")).toBeFocused();
+  await page.locator("#loader-close").click();
+  assert.equal(await exportZook(), modifiedBytes);
+  await fileCommand("New");
+  await page.locator("#loader-replace-discard").click();
+  await expect(page.locator("#new-zook-name")).toBeFocused();
+  await accessibility("New Zook name");
+  await shot("new-zook");
+  await page.locator("#new-zook-name").fill("   ");
+  await page.locator("#new-zook-confirm").click();
+  await expect(page.locator("#new-zook-status")).toContainText("Enter a name");
+  await expect(page.locator("#new-zook-name")).toHaveValue("   ");
+  await expect(page.locator("#new-zook-name")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#loader-new")).toBeFocused();
+  await page.locator("#loader-close").click();
+  assert.equal(await exportZook(), modifiedBytes);
+  checks.push("New: focused naming, invalid-name recovery and byte-identical cancellation at both prompts");
+
+  await fileCommand("New");
+  await page.evaluate(() => {
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (this.name === "zookIndex") {
+        IDBObjectStore.prototype.put = originalPut;
+        throw new DOMException("Simulated storage exhaustion", "QuotaExceededError");
+      }
+      return Reflect.apply(originalPut, this, key === undefined ? [value] : [value, key]);
+    };
+  });
+  await page.locator("#loader-replace-save").click();
+  await expect(page.locator("#loader-replace-status")).toContainText("storage is full");
+  await expect(page.locator("#loader-replace-cancel")).toBeFocused();
+  await expect(page.locator("#new-zook-dialog")).toBeHidden();
+  await page.locator("#loader-replace-cancel").click();
+  await page.locator("#loader-close").click();
+  assert.equal(await exportZook(), modifiedBytes);
+  checks.push("Save before New: storage failure prevents replacement and preserves dirty canonical bytes");
+
+  await page.getByLabel("Width", { exact: true }).fill("0.82");
+  const savedBeforeOpen = await exportZook();
+  await page.locator("#loader-command").click();
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Tutorial Walker copy" }).click();
+  await page.locator("#loader-open").click();
+  await page.locator("#loader-replace-save").click();
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  assert.equal(await exportZook(), changedCopyBytes);
+  await page.locator("#loader-command").click();
+  await expect(page.locator("#loader-list [role=option]")).toHaveCount(2);
+  await storedOriginal().click();
+  await page.locator("#loader-open").click();
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  assert.equal(await exportZook(), savedBeforeOpen);
+  checks.push("Save before Open: original saved in place and captured copy target preserved through library refresh");
+
+  await page.getByLabel("Width", { exact: true }).fill("0.83");
+  const beforeFailedOpen = await exportZook();
+  await fileCommand("Open");
+  await page.getByRole("button", { name: "Desktop", exact: true }).click();
+  await page.locator("#loader-desktop-input").setInputFiles({ name: "invalid.zook.json", mimeType: "application/json", buffer: Buffer.from("not-json") });
+  await page.locator("#loader-replace-discard").click();
+  await expect(page.locator("#loader-replace-confirm")).toBeHidden();
+  await expect(page.locator("#zook-loader")).toHaveAttribute("aria-busy", "false");
+  await page.locator("#loader-close").click();
+  assert.equal(await exportZook(), beforeFailedOpen);
+  await page.locator("#undo-command").click();
+  assert.equal(await exportZook(), savedBeforeOpen);
+  checks.push("Open: invalid import after Don't Save preserves current bytes and undo history");
+
+  await page.getByLabel("Width", { exact: true }).fill("0.84");
+  const savedBeforeNew = await exportZook();
+  await fileCommand("New");
+  await page.locator("#loader-replace-save").click();
+  await expect(page.locator("#new-zook-dialog")).toBeVisible();
+  await page.locator("#new-zook-cancel").click();
+  await page.locator("#loader-close").click();
+  assert.equal(await exportZook(), savedBeforeNew);
+  await fileCommand("New");
+  await expect(page.locator("#new-zook-dialog")).toBeVisible();
+  await expect(page.locator("#loader-replace-confirm")).toBeHidden();
+  await page.locator("#new-zook-name").fill("  Cafe\u0301 Walker  ");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  const named = JSON.parse(await exportZook());
+  assert.equal(named.metadata.name, "Café Walker");
+  assert.equal(named.parts.length, 1);
+  assert.deepEqual(named.metadata.lineage, []);
+  assert.deepEqual(named.metadata.passportResults, []);
+  await fileCommand("Save");
+  await expect(page.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
+  await page.reload();
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await expect(page.locator("#loader-list [role=option]")).toHaveCount(3);
+  await expect(page.locator("#loader-list [role=option]").filter({ hasText: "Café Walker" })).toHaveCount(1);
+  await storedOriginal().click();
+  await page.locator("#loader-open").click();
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  assert.equal(await exportZook(), savedBeforeNew);
+  checks.push("New: save-then-cancel retains current Zook; normalized named creation saves separately and survives reload");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {

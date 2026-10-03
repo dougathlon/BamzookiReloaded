@@ -9,7 +9,7 @@
       content="Evidence-bounded browser reconstruction of the original BAMZOOKi v3.1 suite."
     />
     <title>BAMZOOKi — browser reconstruction</title>
-    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-6FdrIZFV.js"></script>
+    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-gzEiUwp-.js"></script>
     <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-Dw2ApFkt.css">
   </head>
   <body>
@@ -602,12 +602,29 @@
             </form>
           </dialog>
           <dialog id="loader-replace-confirm" class="file-confirm" aria-labelledby="loader-replace-title">
-            <h2 id="loader-replace-title">Discard unsaved changes?</h2>
-            <p>Loading a new or example Zook replaces the current unsaved editor state.</p>
+            <h2 id="loader-replace-title">Save changes before continuing?</h2>
+            <p>The selected New or Open action replaces the current Zook only when it succeeds. Save keeps your changes in My Zooks on this device.</p>
+            <p id="loader-replace-status" class="file-system-status" role="status" aria-live="polite"></p>
             <div class="dialog-actions">
               <button id="loader-replace-cancel" type="button">Cancel</button>
-              <button id="loader-replace-discard" type="button">Discard changes</button>
+              <button id="loader-replace-discard" type="button">Don’t Save</button>
+              <button id="loader-replace-save" type="button">Save</button>
             </div>
+          </dialog>
+          <dialog id="new-zook-dialog" class="file-confirm" aria-labelledby="new-zook-title" aria-describedby="new-zook-note">
+            <form id="new-zook-form">
+              <h2 id="new-zook-title">New Zook</h2>
+              <p id="new-zook-note">Start a new Zook from a root blob. Its name will appear in Passport and My Zooks when saved.</p>
+              <label class="file-name-field" for="new-zook-name">
+                <span>Zook name</span>
+                <input id="new-zook-name" type="text" maxlength="256" required autocomplete="off" aria-describedby="new-zook-status" />
+              </label>
+              <p id="new-zook-status" class="file-system-status" role="status" aria-live="polite"></p>
+              <div class="dialog-actions">
+                <button id="new-zook-cancel" type="button">Cancel</button>
+                <button id="new-zook-confirm" type="submit">Create Zook</button>
+              </div>
+            </form>
           </dialog>
           <dialog id="loader-delete-confirm" class="file-confirm" aria-labelledby="loader-delete-title">
             <h2 id="loader-delete-title">Delete this local Zook?</h2>

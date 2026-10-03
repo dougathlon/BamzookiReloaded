@@ -17,6 +17,8 @@ The creatures move autonomously according to their construction and movement set
 
 Use **File / system → Save** to store the current Zook locally. **Save As** creates a differently named copy without changing existing saves. The browser copy uses its new name in Passport; subsequent Save updates that copy. Export remains the way to keep a separate downloadable backup.
 
+**New Zook** asks for a name before creating its root body. When New or Open would replace modified work, choose **Save**, **Don't Save**, or **Cancel**. A failed save or import keeps the current Zook open. Cancelling the New name prompt also keeps it open, including after choosing Save.
+
 The six historical example names retain their recovered catalog metadata, but their original bodies are not decoded. Gameplay marked **Provisional Play Mode** uses reconstruction rules and physics, not historically verified results. Legacy `.Zook` and `.bvz` files are not supported imports. Browser exports use distinct modern formats.
 
 ## Disclaimer
