@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 64441,
-      "sha256": "d413562f67d4aa8406e43d16471f84bb93ca02b8889b83b5d61f440d35870842"
+      "bytes": 64897,
+      "sha256": "fd984d46111c619e90218bf6cb25f1def73ba8fe30ad26007826726e540806a4"
     },
     {
       "path": ".github/scripts/verify-release.mjs",

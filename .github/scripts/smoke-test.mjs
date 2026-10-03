@@ -107,6 +107,8 @@ const keyboardActivate = async (control) => {
     const state = await control.evaluate(element => {
       const active = document.activeElement;
       return { reached: element === active, active: active?.id || active?.tagName || "none",
+        documentFocused: document.hasFocus(), activeFocused: active?.matches(":focus") ?? false,
+        activeDisabled: active?.matches(":disabled") ?? false,
         reverse: active !== null && active !== document.body && Boolean(element.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING) };
     });
     if (state.reached) {
@@ -115,8 +117,11 @@ const keyboardActivate = async (control) => {
       return;
     }
     const key = state.reverse ? "Shift+Tab" : "Tab";
-    trail.push({ active: state.active, key });
+    trail.push({ ...state, key });
     await page.keyboard.press(key);
+    // Observe the next rendering opportunity before issuing another native
+    // traversal key; a tight protocol loop is not a human keyboard journey.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
   }
   throw new Error(`Keyboard action is unreachable after 120 Tab steps: ${JSON.stringify(trail.slice(-20))}`);
 };
@@ -1005,8 +1010,9 @@ try {
   await shot("keyboard-placement-focus");
   await page.locator("#part-select").selectOption("p0002");
   await page.locator("#attachment-facing-roll").fill("-25");
-  await page.locator("#attachment-apply").click();
+  await keyboardActivate(page.locator("#attachment-apply"));
   await expect(page.locator("#editor-announcement")).toHaveText("Adjust position and facing complete");
+  await keyboardFocus(page.locator("#attachment-apply"));
   await keyboardActivate(page.locator("#mirror-command"));
   await expect(page.locator("#part-summary")).toHaveText("5 parts");
   await keyboardFocus(page.locator("#part-select"));
