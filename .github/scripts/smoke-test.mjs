@@ -674,7 +674,7 @@ try {
     if (cancellation === "capture") await canvas.evaluate(element => element.releasePointerCapture(Number(element.dataset.testPointer)));
     if (cancellation === "resize") await page.setViewportSize({ width: 1200, height: 900 });
     await page.mouse.up();
-    await expect(page.locator("#shape-width")).toHaveValue("1");
+    await expect(page.locator("#shape-width"), `Bounds proposal must cancel after ${cancellation}`).toHaveValue("1");
     await expect(page.getByRole("dialog", { name: "File / system" })).toBeHidden();
     assert.equal(await exportZook(), rootBefore);
     if (cancellation === "resize") await page.setViewportSize({ width: 1280, height: 900 });
