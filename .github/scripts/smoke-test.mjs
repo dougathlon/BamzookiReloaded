@@ -119,6 +119,33 @@ const sortingFixture = (base, name, passportResults) => {
   return JSON.stringify(ordered({ ...document, checksum: createHash("sha256").update(JSON.stringify(ordered(document))).digest("hex") }));
 };
 
+// Synthetic compatibility fixtures exercise old browser profiles, not original replays.
+const priorHurdlesFixture = (base, version) => {
+  const bands = [
+    ["narrow-cubes", [47, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58]],
+    ["capsules", [80, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92]],
+    ["broad-cubes", [22, 71, 72, 73, 74, 75, 76, 77, 79]],
+    ["spheres", [10, 11, 12, 13, 14, 16, 17, 18, 19]],
+    ["cylinders", [23, 24, 25, 26, 27, 28, 29, 30, 31]],
+  ];
+  const ids = new Map(bands.flatMap(([name, members]) => members.map((id, index) =>
+    [`hurdles-agent-${id}`, `hurdles-${name}-${String(index + 1).padStart(2, "0")}`])));
+  const ordered = (value) => Array.isArray(value) ? value.map(ordered) : value !== null && typeof value === "object"
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => [key, ordered(child)])) : value;
+  const signed = (value) => {
+    const { checksum: _checksum, ...payload } = value;
+    return { ...payload, checksum: createHash("sha256").update(JSON.stringify(ordered(payload))).digest("hex") };
+  };
+  const replay = structuredClone(base);
+  replay.title = `Synthetic Hurdles browser profile v${version}`;
+  replay.arena.profileId = `classic31-provisional-super-hurdles-play-v${version}`;
+  replay.arena.movingObjectIds = [...ids.values()].sort((a, b) => a.localeCompare(b));
+  replay.keyframes = replay.keyframes.map((frame) => signed({
+    ...frame, arenaPoses: frame.arenaPoses.map((pose) => ({ ...pose, id: ids.get(pose.id) })).sort((a, b) => a.id.localeCompare(b.id)),
+  }));
+  return JSON.stringify(ordered(signed(replay)));
+};
+
 const dot = (a, b) => a.reduce((sum, value, index) => sum + value * b[index], 0);
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const normalize = (v) => v.map(value => value / Math.hypot(...v));
@@ -338,17 +365,22 @@ try {
     await contests.nth(index).click();
     const name = (await contests.nth(index).innerText()).replaceAll("\n", " ");
     for (const button of await page.locator("button[data-simulator-camera]").all()) await button.click();
+    if (index === 8) {
+      await expect(page.locator("#simulator-scene-evidence")).toContainText("49 visible solid obstacle records retain their individual");
+      await page.locator('button[data-simulator-camera="camera-3"]').click();
+      await shot("hurdles-individual-setup");
+    }
     await page.locator("#simulator-start").click();
     await expect.poll(async () => await page.locator("#simulator-save-dialog").isVisible() ||
       Number.parseFloat(await page.locator("#simulator-time").innerText()) >= 0.5, { timeout: 40_000 }).toBe(true);
-    if (index === 5 || index === 6) await shot(`contest-${index}`);
+    if (index === 5 || index === 6 || index === 8) await shot(`contest-${index}`);
     if (await page.locator("#simulator-stop").isVisible()) {
       await page.locator("#simulator-stop").click({ timeout: 2000 }).catch(async (error) => {
         if (!await page.locator("#simulator-save-dialog").isVisible()) throw error;
       });
     }
     await expect(page.locator("#simulator-save-dialog")).toBeVisible();
-    if ([3, 5, 6].includes(index)) {
+    if ([3, 5, 6, 8].includes(index)) {
       const title = `Browser check ${index}`;
       await page.locator("#simulator-replay-name").fill(title);
       await page.locator("#simulator-save").click();
@@ -373,6 +405,7 @@ try {
     await page.locator("#motion-timeline").press("End");
     for (const button of await page.locator("button[data-motion-camera]").all()) await button.click();
     if (index === 6) await shot("arena-replay");
+    if (index === 8) await shot("hurdles-individual-replay");
     const downloaded = page.waitForEvent("download");
     await page.locator("#motion-export").click();
     const stream = await (await downloaded).createReadStream();
@@ -383,7 +416,37 @@ try {
     assert.equal(replay.participants.length, 2);
     assert.ok(replay.participants.every(({ zook }) => zook.parts.length === 9));
     const count = replay.arena.movingObjectIds.length + replay.arena.dynamicObjectIds.length;
-    assert.equal(count, index === 3 ? 1 : index === 5 ? 58 : 61);
+    assert.equal(count, index === 3 ? 1 : index === 5 ? 58 : index === 8 ? 49 : 61);
+    if (index === 8) {
+      assert.equal(replay.arena.profileId, "classic31-provisional-super-hurdles-play-v3");
+      assert.ok(replay.arena.movingObjectIds.every((id) => /^hurdles-agent-\d+$/.test(id)));
+      const cylinder25 = replay.keyframes[0].arenaPoses.find(({ id }) => id === "hurdles-agent-25");
+      assert.equal(cylinder25.translation.y, Math.fround(Math.fround(0.3 * 0.08) + Math.fround(-1.5 * 0.08)));
+      const canvasHash = async () => createHash("sha256").update(await page.locator("#motion-canvas").screenshot()).digest("hex");
+      await page.locator("#motion-loop").uncheck();
+      await page.locator("#motion-timeline").press("Home");
+      await page.locator('button[data-motion-camera="camera-3"]').click();
+      const currentPixels = await canvasHash();
+      let legacyPixels;
+      for (const version of [1, 2, 3]) {
+        if (version === 3) {
+          await page.locator("#motion-replay-library").selectOption(await option.getAttribute("value"));
+          await page.locator("#motion-load").click();
+        } else {
+          const data = priorHurdlesFixture(replay, version);
+          await page.locator("#motion-open-input").setInputFiles({ name: "compatibility.bamz-replay.json", mimeType: "application/json", buffer: Buffer.from(data) });
+        }
+        await expect(page.locator("#motion-replay-title")).toHaveText(version === 3 ? title : `Synthetic Hurdles browser profile v${version}`);
+        await page.locator("#motion-timeline").press("Home");
+        await page.locator('button[data-motion-camera="camera-3"]').click();
+        if (version === 1) {
+          await expect.poll(canvasHash).not.toBe(currentPixels);
+          legacyPixels = await canvasHash();
+          await shot("hurdles-legacy-replay");
+        } else await expect.poll(canvasHash).toBe(version === 2 ? legacyPixels : currentPixels);
+      }
+      recordCheck("Hurdles: same-scene v3/v1/v2/v3 replay switches preserve profile-specific geometry");
+    }
     assert.ok(replay.durationTicks >= 30);
     assert.ok(replay.keyframes.every((frame) => frame.arenaPoses.length === count));
     assert.notDeepEqual(replay.keyframes.at(-1).arenaPoses, replay.keyframes[0].arenaPoses);
@@ -393,7 +456,7 @@ try {
   await page.reload();
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
   await module("motion-player");
-  await expect(page.locator("#motion-replay-library option")).toHaveCount(3);
+  await expect(page.locator("#motion-replay-library option")).toHaveCount(6);
   recordCheck("Replay library survives a browser-page reload");
 
   await module("zook-kit");
