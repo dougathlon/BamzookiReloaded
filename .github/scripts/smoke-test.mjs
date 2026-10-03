@@ -529,7 +529,11 @@ try {
       await page.locator('button[data-simulator-camera="camera-3"]').click();
       await shot("hurdles-individual-setup");
     }
-    await page.locator("#simulator-start").click();
+    if (index === 0) {
+      await page.locator("#simulator-start").press("Enter");
+      await expect(page.locator("#simulator-stop")).toBeFocused();
+      recordCheck("Simulator: keyboard Start hands focus to enabled Stop");
+    } else await page.locator("#simulator-start").click();
     await expect.poll(async () => await page.locator("#simulator-save-dialog").isVisible() ||
       Number.parseFloat(await page.locator("#simulator-time").innerText()) >= 0.5, { timeout: 40_000 }).toBe(true);
     if (index === 5 || index === 6 || index === 8) await shot(`contest-${index}`);
@@ -560,6 +564,10 @@ try {
   }
 
   await module("motion-player");
+  await page.locator("#motion-refresh").press("Enter");
+  await expect(page.locator("#motion-refresh")).toBeEnabled();
+  await expect(page.locator("#motion-refresh")).toBeFocused();
+  recordCheck("Motion Player: asynchronous Refresh returns operation-owned keyboard focus");
   for (const { title, index } of saved) {
     const option = page.locator("#motion-replay-library option").filter({ hasText: title });
     await expect(option).toHaveCount(1);
@@ -924,12 +932,14 @@ try {
     await expect(page.locator("#editor-announcement")).toHaveText("Reshape blob complete");
     const committed = await exportZook();
     assert.notEqual(committed, rootBefore);
-    await page.locator("#undo-command").click();
+    await page.locator("#undo-command").press("Enter");
     await expect(page.locator("#undo-command")).toBeDisabled();
+    await expect(page.locator("#redo-command")).toBeFocused();
     assert.equal(await exportZook(), rootBefore);
-    await page.locator("#redo-command").click();
+    await page.locator("#redo-command").press("Enter");
+    await expect(page.locator("#undo-command")).toBeFocused();
     assert.equal(await exportZook(), committed);
-    await page.locator("#undo-command").click();
+    await page.locator("#undo-command").press("Enter");
   }
   recordCheck("Bounds reshape: all three root axes, synchronized preview, one-command Undo and byte-identical Redo");
   for (const cancellation of ["escape", "focus", "capture", "resize"]) {
@@ -950,10 +960,13 @@ try {
   }
   recordCheck("Bounds reshape: Escape, external focus, actual capture loss and resize cancel without changing canonical bytes");
   await page.locator("#mode-add").click();
-  await page.getByRole("button", { name: "Left", exact: true }).click();
+  await page.getByRole("button", { name: "Left", exact: true }).press("Enter");
+  await expect(page.locator("#part-select")).toBeFocused();
   await page.locator("#mode-add").click();
   await page.locator("#placement-parent").selectOption("p0002");
-  await page.getByRole("button", { name: "Below", exact: true }).click();
+  await page.getByRole("button", { name: "Below", exact: true }).press("Enter");
+  await expect(page.locator("#part-select")).toBeFocused();
+  await shot("keyboard-placement-focus");
   await page.locator("#part-select").selectOption("p0002");
   await page.locator("#attachment-facing-roll").fill("-25");
   await page.locator("#attachment-apply").click();
