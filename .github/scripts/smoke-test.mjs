@@ -153,7 +153,7 @@ const attachmentFocusPreflight = async () => {
       events: [...window.focusProbeEvents] };
   }) });
   try {
-    for (const variant of ["native", "prevent-shift", "unselectable"]) {
+    for (const variant of ["native", "prevent-shift", "unselectable", "passive-label"]) {
       await probe.setContent('<input id="previous" type="number"><button id="apply">Apply position and facing</button><button id="next">Next</button>');
       await probe.evaluate(variant => {
         const button = document.querySelector("#apply");
@@ -165,6 +165,12 @@ const attachmentFocusPreflight = async () => {
           if (event.code === "ShiftLeft") event.preventDefault();
         }, { once: true });
         if (variant === "unselectable") button.style.setProperty("-webkit-user-select", "none");
+        if (variant === "passive-label") {
+          const label = document.createElement("span");
+          label.textContent = button.textContent;
+          label.style.pointerEvents = "none";
+          button.replaceChildren(label);
+        }
       }, variant);
       await instrument();
       await probe.locator("#previous").fill("-25");
@@ -173,6 +179,7 @@ const attachmentFocusPreflight = async () => {
       await observe(`${variant}: pointer Apply`);
       await probe.keyboard.press("Shift+Tab");
       await observe(`${variant}: reverse Tab`);
+      if (variant === "passive-label") await expect(probe.locator("#previous")).toBeFocused();
     }
     await probe.goto(`${origin}${prefix}`);
     await expect(probe.locator("#app")).toHaveAttribute("aria-busy", "false");
