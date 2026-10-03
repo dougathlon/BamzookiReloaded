@@ -146,6 +146,7 @@ try {
     const replay = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     assert.equal(replay.schemaVersion, 2);
     assert.equal(replay.participants.length, 2);
+    assert.ok(replay.participants.every(({ zook }) => zook.parts.length === 9));
     const count = replay.arena.movingObjectIds.length + replay.arena.dynamicObjectIds.length;
     assert.equal(count, index === 3 ? 1 : index === 5 ? 58 : 61);
     assert.ok(replay.durationTicks >= 30);
