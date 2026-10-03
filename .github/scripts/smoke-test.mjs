@@ -1415,8 +1415,19 @@ const storageJourney = async () => {
     await expect(page.locator("#loader-repair")).toBeHidden();
     recordCheck("Storage repair retry: a fresh confirmed repair rebuilds only the invalid index and preserves both documents");
 
+    // Both live-tab checks are complete. Retire their WebGL/physics runtimes
+    // before the independent upgrade fixture; only its old/new tabs must coexist.
+    await context.close();
+    reportProgress("Storage upgrade: starting isolated legacy/new connection pair");
     const legacyContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+    let upgraded;
     try {
+      await legacyContext.route("**/*", (route) => {
+        const url = route.request().url();
+        if (url.startsWith(origin) || /^(?:blob|data):/.test(url)) return route.continue();
+        errors.push("Upgrade: unexpected external network request");
+        return route.abort();
+      });
       const legacy = await legacyContext.newPage();
       // An empty script keeps this isolated fixture page from opening the new
       // database before the prior-version records and connection are prepared.
@@ -1441,9 +1452,12 @@ const storageJourney = async () => {
         window.__legacyConnection = db;
         db.onversionchange = () => { db.close(); window.__legacyClosed = true; };
       }, repaired);
-      const upgraded = await legacyContext.newPage();
+      upgraded = await legacyContext.newPage();
       upgraded.on("pageerror", error => errors.push(`Upgrade: ${error.message}`));
       upgraded.on("console", message => { if (message.type() === "error") errors.push(`Upgrade: ${message.text()}`); });
+      upgraded.on("response", response => {
+        if (response.status() >= 400 && !response.url().endsWith("/favicon.ico")) errors.push(`Upgrade HTTP ${response.status()}`);
+      });
       await upgraded.goto(`${origin}${prefix}`);
       await expect(upgraded.locator("#app")).toHaveAttribute("aria-busy", "false");
       await expect.poll(() => legacy.evaluate(() => window.__legacyClosed === true)).toBe(true);
@@ -1461,8 +1475,13 @@ const storageJourney = async () => {
       await open(upgraded, "Recovered deletion");
       assert.equal(await exportZook(upgraded), storedBytes(repaired, "Recovered deletion"));
       recordCheck("Storage upgrade: v1 records survive byte-identically while old connections close and old-version writers are refused");
+    } catch (error) {
+      // Preserve the failing fixture before its context is closed. The outer
+      // journey screenshot cannot inspect an already retired earlier page.
+      if (upgraded) await upgraded.screenshot({ path: path.join(output, `${engine}-storage-upgrade-failure.png`), fullPage: true }).catch(() => {});
+      throw error;
     } finally { await legacyContext.close(); }
-  } finally { await peer.close(); }
+  } finally { if (!peer.isClosed()) await peer.close(); }
 };
 
 try {
