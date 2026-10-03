@@ -15,6 +15,8 @@ Use a desktop browser with WebGL2 and WebAssembly, at a window size of at least 
 
 The creatures move autonomously according to their construction and movement settings; this is not a keyboard-controlled racing game.
 
+Use **File / system → Save** to store the current Zook locally. **Save As** creates a differently named copy without changing existing saves. The browser copy uses its new name in Passport; subsequent Save updates that copy. Export remains the way to keep a separate downloadable backup.
+
 The six historical example names retain their recovered catalog metadata, but their original bodies are not decoded. Gameplay marked **Provisional Play Mode** uses reconstruction rules and physics, not historically verified results. Legacy `.Zook` and `.bvz` files are not supported imports. Browser exports use distinct modern formats.
 
 ## Disclaimer

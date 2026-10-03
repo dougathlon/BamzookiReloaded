@@ -66,6 +66,18 @@ const accessibility = async (name) => {
   assert.deepEqual(violations, [], `${name} accessibility checks`);
   checks.push(`${name}: automated accessibility`);
 };
+const fileCommand = async (name) => {
+  await page.locator("#file-system-command").click();
+  await page.getByRole("dialog", { name: "File / system" }).getByRole("button", { name, exact: true }).click();
+};
+const exportZook = async () => {
+  const downloaded = page.waitForEvent("download");
+  await fileCommand("Export");
+  const stream = await (await downloaded).createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8");
+};
 
 try {
   await page.goto(`${origin}${prefix}`);
@@ -89,8 +101,72 @@ try {
   await page.locator("#save-zook").click();
   await expect(page.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
 
+  const originalBytes = await exportZook();
+  const original = JSON.parse(originalBytes);
+  await fileCommand("Save As");
+  await expect(page.locator("#save-as-name")).toBeFocused();
+  await accessibility("Save As");
+  await shot("save-as");
+  await page.locator("#save-as-confirm").click();
+  await expect(page.locator("#save-as-status")).toContainText("Choose a different name");
+  await page.locator("#save-as-name").fill("Cancelled copy");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#file-system-command")).toBeFocused();
+  assert.equal(await exportZook(), originalBytes);
+  checks.push("Save As: keyboard focus, unchanged-name rejection and byte-identical cancellation");
+
+  await fileCommand("Save As");
+  await page.locator("#save-as-name").fill("Failed copy");
+  await page.evaluate(() => {
+    const originalPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (this.name === "zookIndex") {
+        IDBObjectStore.prototype.put = originalPut;
+        throw new DOMException("Simulated storage exhaustion", "QuotaExceededError");
+      }
+      return Reflect.apply(originalPut, this, key === undefined ? [value] : [value, key]);
+    };
+  });
+  await page.locator("#save-as-confirm").click();
+  await expect(page.locator("#save-as-status")).toContainText("storage is full");
+  await expect(page.locator("#save-as-name")).toBeFocused();
+  await page.locator("#save-as-cancel").click();
+  assert.equal(await exportZook(), originalBytes);
+  checks.push("Save As: interrupted storage leaves canonical editor bytes and original record intact");
+
+  await fileCommand("Save As");
+  await page.locator("#save-as-name").fill("Tutorial Walker copy");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#save-as-dialog")).toBeHidden();
+  await expect(page.locator("#file-system-command")).toBeFocused();
+  const copyBytes = await exportZook();
+  const copy = JSON.parse(copyBytes);
+  assert.deepEqual({ ...copy, checksum: original.checksum, metadata: { ...copy.metadata, name: original.metadata.name } }, original);
+  assert.equal(copy.metadata.name, "Tutorial Walker copy");
+  await page.locator("#undo-command").click();
+  assert.equal(await exportZook(), originalBytes);
+  await page.locator("#redo-command").click();
+  assert.equal(await exportZook(), copyBytes);
+  await page.getByLabel("Width", { exact: true }).fill("0.77");
+  const changedCopyBytes = await exportZook();
+  assert.notEqual(changedCopyBytes, copyBytes);
+  await fileCommand("Save");
+  await expect(page.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
+  await page.reload();
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await expect(page.locator("#loader-list [role=option]")).toHaveCount(2);
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Tutorial Walker copy" }).click();
+  await page.locator("#loader-open").click();
+  assert.equal(await exportZook(), changedCopyBytes);
+  await page.locator("#loader-command").click();
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Tutorial Walker" }).filter({ hasNotText: "copy" }).click();
+  await page.locator("#loader-open").click();
+  assert.equal(await exportZook(), originalBytes);
+  checks.push("Save As: reversible name, independent subsequent Save, two-entry reload and byte-identical original");
+
   await module("simulator");
-  const savedZook = page.locator("#simulator-zook-1 option").filter({ hasText: "My Zooks (9 parts)" });
+  const savedZook = page.locator("#simulator-zook-1 option").filter({ hasText: "Tutorial Walker — My Zooks (9 parts)" });
   await expect(savedZook).toHaveCount(1);
   await page.locator("#simulator-zook-1").selectOption(await savedZook.getAttribute("value"));
   await page.locator("#simulator-zook-2").selectOption("tutorial");

@@ -9,8 +9,8 @@
       content="Evidence-bounded browser reconstruction of the original BAMZOOKi v3.1 suite."
     />
     <title>BAMZOOKi — browser reconstruction</title>
-    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-DuineCYa.js"></script>
-    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-DCArQk46.css">
+    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-6FdrIZFV.js"></script>
+    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-Dw2ApFkt.css">
   </head>
   <body>
     <main id="app" aria-busy="true">
@@ -571,6 +571,21 @@
               <button id="file-system-cancel" type="button">Cancel</button>
             </div>
             <p id="file-system-status" class="file-system-status" role="status" aria-live="polite">Choose a command.</p>
+          </dialog>
+          <dialog id="save-as-dialog" class="file-confirm save-as-dialog" aria-labelledby="save-as-title" aria-describedby="save-as-note">
+            <form id="save-as-form">
+              <h2 id="save-as-title">Save As</h2>
+              <p id="save-as-note">Create a new My Zooks entry and leave existing saves unchanged. In this browser version, the new name also becomes the copy's Passport name; further Save updates the copy.</p>
+              <label class="file-name-field" for="save-as-name">
+                <span>New Zook name</span>
+                <input id="save-as-name" type="text" maxlength="256" required autocomplete="off" aria-describedby="save-as-status" />
+              </label>
+              <p id="save-as-status" class="file-system-status" role="status" aria-live="polite"></p>
+              <div class="dialog-actions">
+                <button id="save-as-cancel" type="button">Cancel</button>
+                <button id="save-as-confirm" type="submit">Save copy</button>
+              </div>
+            </form>
           </dialog>
           <dialog id="exact-slider-dialog" class="file-confirm exact-slider-dialog" aria-labelledby="exact-slider-title">
             <form id="exact-slider-form">
