@@ -9,8 +9,8 @@
       content="Evidence-bounded browser reconstruction of the original BAMZOOKi v3.1 suite."
     />
     <title>BAMZOOKi — browser reconstruction</title>
-    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-gzEiUwp-.js"></script>
-    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-Dw2ApFkt.css">
+    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-Byl0OqcY.js"></script>
+    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-DqP9DqiJ.css">
   </head>
   <body>
     <main id="app" aria-busy="true">
@@ -76,11 +76,12 @@
                 <div class="loader-list-heading">
                   <h3 id="loader-list-title">Examples</h3>
                   <label for="loader-sort">Sort</label>
-                  <select id="loader-sort">
+                  <select id="loader-sort" aria-describedby="loader-sort-note">
                     <option value="original">Original order</option>
                     <option value="name">Name</option>
                   </select>
                 </div>
+                <p id="loader-sort-note" class="loader-sort-note" role="status" hidden></p>
                 <ul id="loader-list" class="loader-list" role="listbox" aria-label="Available Zooks" tabindex="0"></ul>
                 <p id="loader-empty" class="loader-empty" hidden></p>
               </section>

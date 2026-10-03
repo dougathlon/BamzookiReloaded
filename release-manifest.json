@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 20241,
-      "sha256": "6607adfd1958aa44b7bb1fc1f6ad3a2c0d343a7aea65da3dad0152c0d9b0fc37"
+      "bytes": 27743,
+      "sha256": "ff96638dd0d7492c388d2629a1e6cf1f72184a966f701f5ce3711f3f1c5792c3"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
@@ -18,8 +18,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 3209,
-      "sha256": "c099c1f0f50116df11086e9833fe0c699e80820ec0ec9b9e44bb8835be7ac89a"
+      "bytes": 3641,
+      "sha256": "429c03672ba8c467967e204afb469899f04bfdf167d40463da284d43112c6a12"
     },
     {
       "path": "site/.nojekyll",
@@ -27,19 +27,19 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "path": "site/assets/index-Dw2ApFkt.css",
-      "bytes": 30747,
-      "sha256": "7b83dd83916c647c38a6bae26d756bc39f320f32dd45a77dc1f5261133b06e00"
+      "path": "site/assets/index-Byl0OqcY.js",
+      "bytes": 3833799,
+      "sha256": "842118c504332c4381cf5b64be72e912c66e3684a833e03a9c42e776bd31af8b"
     },
     {
-      "path": "site/assets/index-gzEiUwp-.js",
-      "bytes": 3830603,
-      "sha256": "4e7d24a558828b2afbda26d9bdbdb4aee7819480c2de92c17167dc338cd788a6"
+      "path": "site/assets/index-DqP9DqiJ.css",
+      "bytes": 30933,
+      "sha256": "916aefd9427073ed7ab3a98424dd833ccd911258e4d2df672d6f65c124ee3005"
     },
     {
       "path": "site/index.html",
-      "bytes": 51252,
-      "sha256": "d20fe3ff5ee40a46cc5995c6418163995737a9e2881329eba0081cc6778a4e1b"
+      "bytes": 51380,
+      "sha256": "5fbd6710dc97e7f7986e76643c4f2ef97dc71187e440a622a64f4a68c0856711"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",

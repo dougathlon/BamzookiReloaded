@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 
 const require = createRequire(process.env.BROWSER_TEST_RUNTIME
   ? path.join(path.resolve(process.env.BROWSER_TEST_RUNTIME), "package.json") : import.meta.url);
@@ -79,6 +80,16 @@ const exportZook = async () => {
   return Buffer.concat(chunks).toString("utf8");
 };
 
+// Test-only fixtures start from a canonical export. Added scores are integers;
+// all other numeric values already have the export's canonical precision.
+const sortingFixture = (base, name, passportResults) => {
+  const { checksum: _checksum, ...document } = structuredClone(base);
+  document.metadata = { ...document.metadata, name, creator: "Automated sorting fixture; not a gameplay achievement", passportResults };
+  const ordered = (value) => Array.isArray(value) ? value.map(ordered) : value !== null && typeof value === "object"
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => [key, ordered(child)])) : value;
+  return JSON.stringify(ordered({ ...document, checksum: createHash("sha256").update(JSON.stringify(ordered(document))).digest("hex") }));
+};
+
 try {
   await page.goto(`${origin}${prefix}`);
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
@@ -86,6 +97,29 @@ try {
   await expect(page.locator(".publication-disclaimer")).toContainText("not affiliated with or endorsed by the BBC or Gameware");
   await accessibility("Loader");
   await shot("loader");
+  const originalOrders = {
+    sprint: ["Spider", "Leapsa", "Scrabber", "Ant", "Wormthing", "Twigger"],
+    "block-push": ["Spider", "Leapsa", "Wormthing", "Ant", "Scrabber", "Twigger"],
+    hurdles: ["Spider", "Leapsa", "Twigger", "Wormthing", "Scrabber", "Ant"],
+    "high-jump": ["Twigger", "Leapsa", "Spider", "Ant", "Scrabber", "Wormthing"],
+    lap: ["Spider", "Leapsa", "Ant", "Scrabber", "Twigger", "Wormthing"],
+  };
+  for (const [slug, names] of Object.entries(originalOrders)) {
+    await page.locator("#loader-sort").selectOption(`classic31.trial.${slug}`);
+    const options = await page.locator("#loader-list [role=option]").allTextContents();
+    assert.ok(options.every((text, index) => text.startsWith(names[index])));
+    await expect(page.locator('#loader-list [aria-selected="true"]')).toContainText("Ant");
+    await expect(page.locator("#loader-sort-note")).toContainText("Historical metadata only");
+  }
+  await page.locator("#loader-list").focus();
+  await page.keyboard.press("Home");
+  await expect(page.locator('#loader-list [aria-selected="true"]')).toContainText("Spider");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator('#loader-list [aria-selected="true"]')).toContainText("Leapsa");
+  await accessibility("Loader result sorting");
+  await shot("loader-results");
+  await page.locator("#loader-sort").selectOption("original");
+  checks.push("Loader: all five historical result orders, retained selection and sorted keyboard navigation");
   await page.locator("#loader-tutorial").click();
   await expect(page.locator("#part-summary")).toHaveText("9 parts");
   await page.locator("#mode-test").click();
@@ -354,6 +388,80 @@ try {
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), savedBeforeNew);
   checks.push("New: save-then-cancel retains current Zook; normalized named creation saves separately and survives reload");
+
+  const result = (trialKey, value, unit = "cm/sec", resultClass = "provisional-play") => ({ trialKey, value, unit, resultClass });
+  const fixtures = [
+    sortingFixture(named, "Sort Alpha", [result("classic31.trial.sprint", 30, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v1.sprint", 100), result("classic31.provisional-play.v2.sprint", 5), result("classic31.provisional-play.v2.lap", 50, "sec")]),
+    sortingFixture(named, "Sort Beta", [result("classic31.trial.sprint", 10, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v2.sprint", 20), result("classic31.provisional-play.v2.lap", 30, "sec")]),
+    sortingFixture(named, "Sort Gamma", [result("classic31.trial.sprint", 40, "m/sec", "historical-metadata"), result("classic31.provisional-play.v1.sprint", 120), result("classic31.provisional-play.v2.sprint", 500, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v3.sprint", 999)]),
+  ];
+  for (const fixture of fixtures) {
+    await page.locator("#loader-command").click();
+    await page.getByRole("button", { name: "Desktop", exact: true }).click();
+    await page.locator("#loader-desktop-input").setInputFiles({ name: "sort-check.zook.json", mimeType: "application/json", buffer: Buffer.from(fixture) });
+    await expect(page.locator("#zook-loader")).toBeHidden();
+    await fileCommand("Save");
+    await expect(page.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
+  }
+  const savedFixtureBytes = await exportZook();
+  await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("bamzooki-original-v31");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("zookIndex", "readwrite");
+        tx.oncomplete = resolve;
+        tx.onabort = () => reject(tx.error);
+        const store = tx.objectStore("zookIndex");
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const alpha = request.result.find(({ name }) => name === "Sort Alpha");
+          store.put({ ...alpha, passportResults: [{ trialKey: "classic31.provisional-play.v2.sprint", value: 999, unit: "cm/sec", resultClass: "provisional-play" }] });
+        };
+      });
+    } finally { db.close(); }
+  });
+  await page.reload();
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await expect(page.locator("#loader-list [role=option]")).toHaveCount(6);
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Sort Alpha" }).click();
+  await page.locator("#loader-tab-achievement").click();
+  const sortedNames = async () => page.locator("#loader-list [role=option] strong").allTextContents();
+  for (const [key, first] of [
+    ["classic31.trial.sprint", ["Sort Alpha", "Sort Beta"]],
+    ["classic31.provisional-play.v1.sprint", ["Sort Gamma", "Sort Alpha"]],
+    ["classic31.provisional-play.v2.sprint", ["Sort Beta", "Sort Alpha"]],
+    ["classic31.provisional-play.v2.lap", ["Sort Beta", "Sort Alpha"]],
+  ]) {
+    await page.locator("#loader-sort").selectOption(key);
+    assert.deepEqual((await sortedNames()).slice(0, 2), first);
+    await expect(page.locator('#loader-list [aria-selected="true"]')).toContainText("Sort Alpha");
+    await expect(page.locator("#loader-tab-achievement")).toHaveAttribute("aria-selected", "true");
+  }
+  await expect(page.locator("#loader-preview")).toContainText("Provisional Play v2");
+  await expect(page.locator("#loader-preview")).toContainText("Legacy Provisional v1");
+  await expect(page.locator("#loader-sort-note")).toContainText("Lowest first");
+  await accessibility("My Zooks result sorting");
+  await shot("my-zooks-results");
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await expect(page.locator("#loader-sort")).toHaveValue("classic31.provisional-play.v2.lap");
+  await expect(page.locator('#loader-list [aria-selected="true"]')).toContainText("Sort Alpha");
+  await page.getByRole("button", { name: "Examples", exact: true }).click();
+  await expect(page.locator("#loader-sort")).toHaveValue("original");
+  await expect(page.locator("#loader-sort optgroup")).toHaveCount(1);
+  await page.getByRole("button", { name: "Website Zooks", exact: true }).click();
+  await expect(page.locator("#loader-sort")).toBeDisabled();
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Sort Gamma" }).click();
+  await expect(page.locator("#loader-preview")).toContainText("3 retained record(s)");
+  await page.locator("#loader-open").click();
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  assert.equal(await exportZook(), savedFixtureBytes);
+  checks.push("My Zooks: saved/reloaded score sets, stable selection and refresh, source reset, wrong-unit/class/version exclusion, forged-index rejection and unchanged canonical bytes");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {

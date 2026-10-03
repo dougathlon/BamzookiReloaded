@@ -19,6 +19,8 @@ Use **File / system → Save** to store the current Zook locally. **Save As** cr
 
 **New Zook** asks for a name before creating its root body. When New or Open would replace modified work, choose **Save**, **Don't Save**, or **Cancel**. A failed save or import keeps the current Zook open. Cancelling the New name prompt also keeps it open, including after choosing Save.
 
+The Loader's **Sort** menu can rank each of the five trials. Historical metadata, current Provisional Play v2 and retained legacy v1 results are separate score sets; the caption identifies which one you are viewing. Higher speed/distance and lower Lap time come first, with missing or incompatible records last. This ordering is a reconstruction choice, not a recovered original algorithm. Sorting never changes the saved results.
+
 The six historical example names retain their recovered catalog metadata, but their original bodies are not decoded. Gameplay marked **Provisional Play Mode** uses reconstruction rules and physics, not historically verified results. Legacy `.Zook` and `.bvz` files are not supported imports. Browser exports use distinct modern formats.
 
 ## Disclaimer
