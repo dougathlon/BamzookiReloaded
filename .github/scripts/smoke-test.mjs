@@ -119,8 +119,12 @@ const cameraGestures = async (kind) => {
     await neutralControl.focus();
     await neutralControl.hover();
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    const buffer = await element.screenshot(name === undefined ? {} : {
-      path: path.join(output, `${engine}-${kind}-${name}.png`),
+    const buffer = await element.screenshot({
+      ...(name === undefined ? {} : { path: path.join(output, `${engine}-${kind}-${name}.png`) }),
+      // Motion labels overlay the canvas. Chromium can repaint their rounded
+      // edges differently after a label update; compare the camera image only.
+      // Full-page screenshots retain the original, unmodified DOM labels.
+      style: "#motion-main-label, #motion-stage-tick, #motion-stage-participants { visibility: hidden !important; }",
     });
     const hash = createHash("sha256").update(buffer).digest("hex");
     if (name !== undefined) {
@@ -187,6 +191,55 @@ const cameraGestures = async (kind) => {
   assert.equal(await pixels(canvas), autoFit, "Camera 2 orbit resets exactly");
   await button(1).click();
   recordCheck(`${kind}: main/miniature right-drag and wheel, independent views, Camera 2 auto-fit, keyboard orbit and exact Home reset`);
+};
+const replayTimelineGestures = async () => {
+  const timeline = page.locator("#motion-timeline");
+  const play = page.locator("#motion-play");
+  const loop = page.locator("#motion-loop");
+  await loop.check();
+  await timeline.press("Home");
+  await timeline.scrollIntoViewIfNeeded();
+  const bounds = await timeline.boundingBox();
+  assert.ok(bounds, "Replay timeline must be measurable");
+  const x = bounds.x + bounds.width / 2;
+  const holdAtMiddle = async () => {
+    await page.mouse.move(x, bounds.y + bounds.height - 8);
+    await page.mouse.down();
+    await page.mouse.move(x, bounds.y + bounds.height / 2, { steps: 4 });
+    await expect(play).toHaveText("Play");
+    const value = await timeline.inputValue();
+    assert.ok(Number(value) > 0 && Number(value) < Number(await timeline.getAttribute("max")),
+      "Dragging must select an interior authoritative sample");
+    await page.waitForTimeout(250);
+    await expect(timeline).toHaveValue(value);
+    return value;
+  };
+  const chosen = await holdAtMiddle();
+  await page.mouse.up();
+  await expect(play).toHaveText("Pause");
+  await expect.poll(() => timeline.inputValue()).not.toBe(chosen);
+  await shot("motion-player-timeline-release-playing");
+  await timeline.press("Home");
+  await expect(timeline).toHaveValue("0");
+  await expect(play).toHaveText("Play");
+  const interrupted = await holdAtMiddle();
+  await page.locator("#motion-eject").press("Enter");
+  await expect(page.locator("#motion-eject-menu")).toBeVisible();
+  await page.mouse.up();
+  await page.locator("#motion-eject-resume").click();
+  await expect(play).toHaveText("Play");
+  await expect(timeline).toHaveValue(interrupted);
+  await loop.uncheck();
+  await page.mouse.click(x, bounds.y + 1);
+  await expect(timeline).toHaveValue(await timeline.getAttribute("max"));
+  await expect(play).toHaveText("Play");
+  await loop.check();
+  await page.mouse.click(x, bounds.y + 1);
+  await expect(play).toHaveText("Pause");
+  await expect.poll(() => timeline.inputValue()).not.toBe(await timeline.getAttribute("max"));
+  await timeline.press("Home");
+  await expect(play).toHaveText("Play");
+  recordCheck("Motion Player: exact held sample, release continues, keyboard stays paused, modal cancels resume and endpoints honor Loop");
 };
 const hologramPixels = async (panel, name, parts) => {
   const preview = panel.locator(".zook-hologram");
@@ -528,7 +581,8 @@ try {
     const replayBytes = await exportReplay();
     if (index === 3) {
       await cameraGestures("motion-player");
-      assert.equal(await exportReplay(), replayBytes, "Camera manipulation must not change any exported replay byte");
+      await replayTimelineGestures();
+      assert.equal(await exportReplay(), replayBytes, "Camera and timeline manipulation must not change any exported replay byte");
     }
     const replay = JSON.parse(replayBytes);
     assert.equal(replay.schemaVersion, 2);
