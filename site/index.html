@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="Evidence-bounded browser reconstruction of the original BAMZOOKi v3.1 suite."
+    />
+    <title>BAMZOOKi — browser reconstruction</title>
+    <script type="module" crossorigin src="/BamzookiReloaded/assets/index-9vkxHnB4.js"></script>
+    <link rel="stylesheet" crossorigin href="/BamzookiReloaded/assets/index-DdeWmqhs.css">
+  </head>
+  <body>
+    <main id="app" aria-busy="true">
+      <section class="shell" aria-labelledby="app-title">
+        <canvas id="game-canvas" aria-label="BAMZOOKi three-dimensional workspace"></canvas>
+        <div class="chrome">
+          <header class="brand-strip">
+            <div>
+              <p class="eyebrow">Original v3.1 browser reconstruction</p>
+              <h1 id="app-title">BAMZOOKi</h1>
+            </div>
+            <div class="brand-actions">
+              <button id="modules-command" class="help-command" type="button">Modules</button>
+              <button id="loader-command" class="help-command" type="button">Zook Loader</button>
+              <button id="input-settings-command" class="help-command" type="button">Input settings</button>
+              <button id="help-command" class="help-command" type="button">Help (F1)</button>
+              <button
+                id="fullscreen-command"
+                class="help-command"
+                type="button"
+                aria-pressed="false"
+                aria-describedby="fullscreen-status"
+              >Browser full screen</button>
+              <p id="fullscreen-status" class="visually-hidden" role="status" aria-live="polite">
+                Full screen availability is being checked.
+              </p>
+              <p id="build-status" class="status-chip">Loading deterministic primitive…</p>
+            </div>
+          </header>
+          <dialog
+            id="input-settings-dialog"
+            class="file-confirm input-settings-dialog"
+            aria-labelledby="input-settings-title"
+            aria-describedby="input-settings-boundary"
+          >
+            <h2 id="input-settings-title">Input settings</h2>
+            <p id="input-settings-boundary" class="help-note"><strong>Modern accessibility addition:</strong> remapping changes browser controls only. It never changes Zook data, physics, replay, or the evidenced historical defaults.</p>
+            <p>Arrow keys remain secondary camera directions, and the number-pad plus/minus keys remain secondary zoom controls.</p>
+            <div id="input-settings-fields" class="input-settings-fields"></div>
+            <p id="input-settings-status" class="input-settings-status" role="status" aria-live="polite"></p>
+            <div class="dialog-actions input-settings-actions">
+              <button id="input-settings-restore" type="button">Restore historical defaults</button>
+              <button id="input-settings-save" type="button">Save settings</button>
+              <button id="input-settings-close" type="button">Close</button>
+            </div>
+          </dialog>
+          <section id="zook-loader" class="loader-panel" aria-labelledby="loader-title">
+            <header class="loader-heading">
+              <div>
+                <p class="eyebrow">Original v3.1 product surface</p>
+                <h2 id="loader-title" tabindex="-1">Zook Loader</h2>
+              </div>
+              <button id="loader-close" type="button">Continue current Zook</button>
+            </header>
+            <nav class="loader-categories" aria-label="Zook locations">
+              <button type="button" data-loader-category="my-zooks">My Zooks</button>
+              <button type="button" data-loader-category="examples" aria-pressed="true">Examples</button>
+              <button type="button" data-loader-category="website-zooks">Website Zooks</button>
+              <button type="button" data-loader-category="desktop">Desktop</button>
+            </nav>
+            <div class="loader-body">
+              <section class="loader-list-pane" aria-labelledby="loader-list-title">
+                <div class="loader-list-heading">
+                  <h3 id="loader-list-title">Examples</h3>
+                  <label for="loader-sort">Sort</label>
+                  <select id="loader-sort">
+                    <option value="original">Original order</option>
+                    <option value="name">Name</option>
+                  </select>
+                </div>
+                <ul id="loader-list" class="loader-list" role="listbox" aria-label="Available Zooks" tabindex="0"></ul>
+                <p id="loader-empty" class="loader-empty" hidden></p>
+              </section>
+              <section class="loader-preview-pane" aria-labelledby="loader-preview-heading">
+                <h3 id="loader-preview-heading">Preview and Passport</h3>
+                <div class="loader-preview-tabs" role="tablist" aria-label="Zook preview details">
+                  <button id="loader-tab-general" type="button" role="tab" data-loader-tab="general" aria-controls="loader-preview" aria-selected="true" tabindex="0">General</button>
+                  <button id="loader-tab-hologram" type="button" role="tab" data-loader-tab="hologram" aria-controls="loader-preview" aria-selected="false" tabindex="-1">Hologram</button>
+                  <button id="loader-tab-history" type="button" role="tab" data-loader-tab="history" aria-controls="loader-preview" aria-selected="false" tabindex="-1">History</button>
+                  <button id="loader-tab-physical" type="button" role="tab" data-loader-tab="physical" aria-controls="loader-preview" aria-selected="false" tabindex="-1">Physical</button>
+                  <button id="loader-tab-achievement" type="button" role="tab" data-loader-tab="achievement" aria-controls="loader-preview" aria-selected="false" tabindex="-1">Achievement</button>
+                </div>
+                <div id="loader-preview" class="loader-preview" role="tabpanel" aria-labelledby="loader-tab-general"></div>
+              </section>
+            </div>
+            <footer class="loader-actions">
+              <p id="loader-announcement" role="status" aria-live="polite">Choose an example or make a new Zook.</p>
+              <div>
+                <button id="loader-new" type="button">New Zook</button>
+                <button id="loader-open" type="button">Open selected</button>
+                <button id="loader-delete" type="button" disabled>Delete</button>
+                <button id="loader-repair" type="button" hidden>Repair storage…</button>
+              </div>
+            </footer>
+            <input id="loader-desktop-input" type="file" accept=".zook.json,.zook.zip,application/json,application/zip" hidden />
+          </section>
+          <section id="simulator-surface" class="module-surface" aria-labelledby="simulator-title" hidden>
+            <header class="module-surface-heading">
+              <div>
+                <p class="eyebrow">Original v3.1 module</p>
+                <h2 id="simulator-title" tabindex="-1">Simulator</h2>
+              </div>
+              <p class="module-phase">Evidence-bounded Provisional Play</p>
+            </header>
+            <div class="simulator-setup-grid">
+              <section aria-labelledby="contest-pack-title">
+                <h3 id="contest-pack-title">Contest Pack 1</h3>
+                <ul id="simulator-contest-list" class="module-list" aria-label="Original contests"></ul>
+              </section>
+              <section class="simulator-preview" aria-labelledby="simulator-preview-title">
+                <h3 id="simulator-preview-title">Contest setup</h3>
+                <p id="simulator-contest-boundary" class="provisional-play">Evidence-bounded arena — reconstructed rules are Provisional</p>
+                <div id="simulator-private-visual" class="simulator-private-visual" hidden></div>
+                <figure id="simulator-arena-preview" class="simulator-arena-preview" hidden>
+                  <canvas
+                    id="simulator-arena-canvas"
+                    role="img"
+                    aria-label="Provisional reconstructed contest arena and live contest view"
+                    aria-describedby="simulator-arena-caption"
+                  ></canvas>
+                  <figcaption id="simulator-arena-caption">
+                    Arena geometry comes from readable v3.1 scene records. Motion, physics, timing, finish, and winner behavior are isolated reconstruction choices, not recovered historical rules.
+                  </figcaption>
+                </figure>
+                <section class="simulator-live-controls" aria-label="Provisional contest controls">
+                  <div class="simulator-clock">
+                    <span>Start</span><output id="simulator-countdown" role="status" aria-live="polite">Ready</output>
+                    <span>Time</span><output id="simulator-time" role="timer" aria-label="Elapsed contest time">0.0 s</output>
+                  </div>
+                  <div class="simulator-transport">
+                    <button id="simulator-start" type="button">Start contest</button>
+                    <button id="simulator-stop" type="button" hidden>Stop</button>
+                  </div>
+                  <div class="simulator-camera-strip" aria-label="Simulator camera selectors">
+                    <canvas id="simulator-camera-preview-canvas" aria-hidden="true"></canvas>
+                    <div>
+                      <button type="button" data-simulator-camera="camera-1" aria-pressed="true">Camera 1</button>
+                      <button type="button" data-simulator-camera="camera-2" aria-pressed="false">Camera 2</button>
+                      <button type="button" data-simulator-camera="camera-3" aria-pressed="false">Camera 3</button>
+                      <button type="button" data-simulator-camera="camera-4" aria-pressed="false">Camera 4</button>
+                    </div>
+                  </div>
+                </section>
+                <dl id="simulator-contest-details"></dl>
+                <section id="simulator-scene-evidence" class="simulator-scene-evidence" aria-labelledby="simulator-scene-evidence-title">
+                  <h4 id="simulator-scene-evidence-title">Authored scene evidence</h4>
+                  <div id="simulator-scene-evidence-body"></div>
+                </section>
+                <div class="simulator-zook-selectors">
+                  <label for="simulator-zook-1">Contestant 1</label>
+                  <select id="simulator-zook-1"></select>
+                  <label for="simulator-zook-2">Contestant 2</label>
+                  <select id="simulator-zook-2"></select>
+                </div>
+                <p class="module-evidence-note">The pack's Blue/Red slot labels conflict with Green/Red wording in some scene descriptions. This reconstruction preserves the pack mapping and does not normalize the conflict.</p>
+                <p id="simulator-status" role="status" aria-live="polite">Original agent behavior, collision semantics, scoring, finish timing, and winner mapping are not independently recovered.</p>
+              </section>
+            </div>
+            <dialog id="simulator-save-dialog" class="file-system-dialog simulator-save-dialog" aria-labelledby="simulator-save-title" aria-describedby="simulator-save-note">
+              <h3 id="simulator-save-title">Save contest replay?</h3>
+              <p id="simulator-save-note">This browser-native replay records authoritative reconstruction samples. It is not an original <code>.bvz</code> file.</p>
+              <label for="simulator-replay-name">Replay name</label>
+              <input id="simulator-replay-name" type="text" required maxlength="128" autocomplete="off" />
+              <p id="simulator-save-status" role="status"></p>
+              <div class="dialog-actions">
+                <button id="simulator-save" type="button">Save</button>
+                <button id="simulator-dont-save" type="button">Don’t Save</button>
+              </div>
+            </dialog>
+          </section>
+          <section id="motion-player-surface" class="module-surface motion-player-surface" aria-labelledby="motion-player-title" hidden>
+            <header class="module-surface-heading">
+              <div>
+                <p class="eyebrow">Original v3.1 module</p>
+                <h2 id="motion-player-title" tabindex="-1">Motion Player</h2>
+              </div>
+              <p class="module-phase">Browser-native sampled playback</p>
+            </header>
+            <p class="provisional-play">Reconstruction replay — legacy <code>.bvz</code> playback blocked</p>
+            <div class="motion-player-grid">
+              <section class="motion-library" aria-labelledby="motion-library-title">
+                <h3 id="motion-library-title">Browser replays</h3>
+                <label for="motion-replay-library">Saved in this browser</label>
+                <select id="motion-replay-library" size="5" aria-describedby="motion-library-note"></select>
+                <div class="motion-library-actions">
+                  <button id="motion-refresh" type="button">Refresh</button>
+                  <button id="motion-load" type="button">Load selected</button>
+                  <button id="motion-delete" type="button">Delete selected</button>
+                </div>
+                <button id="motion-open" type="button">Open .bamz-replay.json…</button>
+                <input id="motion-open-input" type="file" accept=".bamz-replay.json,application/json" hidden />
+                <p id="motion-library-note">Replay files embed their canonical Zooks and exact sampled authoritative state. They do not claim original <code>.bvz</code> compatibility.</p>
+                <section class="motion-legacy-library" aria-labelledby="motion-legacy-title">
+                  <h4 id="motion-legacy-title">Original .bvz files — playback Blocked</h4>
+                  <ol id="motion-legacy-list"></ol>
+                  <p>Titles only. The original bytes are not included and these rows cannot be opened or played.</p>
+                </section>
+              </section>
+              <section class="motion-playback" aria-labelledby="motion-replay-title">
+                <h3 id="motion-replay-title">No replay loaded</h3>
+                <div class="motion-view-row">
+                  <div class="motion-stage" aria-label="Sampled replay state">
+                    <div class="motion-main-view">
+                      <canvas id="motion-canvas" aria-label="Motion Player main three-dimensional replay view"></canvas>
+                      <span id="motion-main-label">Main view contract — 3D projection pending</span>
+                      <strong id="motion-stage-tick">Ejected</strong>
+                      <small id="motion-stage-participants">Open or record a browser-native replay.</small>
+                    </div>
+                    <div class="motion-camera-strip" aria-label="Motion Player camera selectors">
+                      <canvas id="motion-camera-preview-canvas" aria-hidden="true"></canvas>
+                      <div class="motion-camera-buttons">
+                        <button type="button" data-motion-camera="camera-1" aria-pressed="true" disabled>Camera 1</button>
+                        <button type="button" data-motion-camera="camera-2" aria-pressed="false" disabled>Camera 2</button>
+                        <button type="button" data-motion-camera="camera-3" aria-pressed="false" disabled>Camera 3</button>
+                        <button type="button" data-motion-camera="camera-4" aria-pressed="false" disabled>Camera 4</button>
+                      </div>
+                    </div>
+                    <p>Four numbered cameras are confirmed; these selectable view policies are explicitly Provisional. Camera 2 auto-frames all sampled Zooks. Camera tracks remain separate from replay v1.</p>
+                  </div>
+                  <div class="motion-timeline-vertical">
+                    <label for="motion-timeline">Authoritative sampled timeline</label>
+                    <input id="motion-timeline" type="range" min="0" max="0" step="1" value="0" disabled />
+                    <output id="motion-time" for="motion-timeline">0 / 0 ticks</output>
+                  </div>
+                </div>
+                <div class="motion-transport">
+                  <div>
+                    <button id="motion-play" type="button" disabled>Play</button>
+                    <button id="motion-restart" type="button" disabled>Restart</button>
+                    <label><input id="motion-loop" type="checkbox" disabled /> Loop</label>
+                    <button id="motion-eject" type="button" disabled>Eject</button>
+                    <button id="motion-export" type="button" disabled>Export replay</button>
+                  </div>
+                </div>
+                <p id="motion-status" role="status" aria-live="polite">No browser-native replay loaded. Legacy files are refused.</p>
+              </section>
+            </div>
+          </section>
+          <dialog id="motion-delete-confirm" class="file-confirm" aria-labelledby="motion-delete-title">
+            <h2 id="motion-delete-title">Delete this browser replay?</h2>
+            <p>This removes the selected replay from browser storage. Export it first if you need a recoverable copy.</p>
+            <div class="dialog-actions">
+              <button id="motion-delete-cancel" type="button">Cancel</button>
+              <button id="motion-delete-confirm-button" type="button">Delete local replay</button>
+            </div>
+          </dialog>
+          <dialog id="motion-eject-menu" class="file-confirm motion-eject-menu" aria-labelledby="motion-eject-title">
+            <h2 id="motion-eject-title">Eject</h2>
+            <p>The original Motion Player exposed these four choices. Browser replay files remain separate from legacy <code>.bvz</code>.</p>
+            <div class="motion-eject-actions">
+              <button id="motion-eject-resume" type="button">Resume</button>
+              <button id="motion-eject-restart" type="button">Restart from beginning</button>
+              <button id="motion-eject-choose" type="button">Choose another file</button>
+              <button id="motion-eject-quit" type="button">Quit</button>
+            </div>
+            <p class="help-note"><strong>Browser boundary:</strong> Choose another file accepts only <code>.bamz-replay.json</code>. Quit returns to Zook Kit because a webpage cannot safely close its tab.</p>
+          </dialog>
+          <dialog id="module-launcher" class="module-launcher" aria-labelledby="module-launcher-title">
+            <header>
+              <div><p>Original v3.1 module boundary</p><h2 id="module-launcher-title">BAMZOOKi modules</h2></div>
+              <button id="module-launcher-close" type="button">Close</button>
+            </header>
+            <p>Three separate module names, boot scripts, and splash screens are confirmed. This browser chooser layout is reconstructed because the original launch layout was not recovered.</p>
+            <div class="module-choice-grid">
+              <button type="button" data-suite-module="zook-kit"><strong>Zook Kit</strong><span>Build, edit, test, and manage Zooks.</span></button>
+              <button type="button" data-suite-module="simulator"><strong>Simulator</strong><span>Select two Zooks and an original Contest Pack entry.</span></button>
+              <button type="button" data-suite-module="motion-player"><strong>Motion Player</strong><span>Original replay surface; legacy decoding remains blocked.</span></button>
+            </div>
+          </dialog>
+          <dialog id="module-dirty-confirm" class="file-confirm" aria-labelledby="module-dirty-title">
+            <h2 id="module-dirty-title">Switch modules with unsaved changes?</h2>
+            <p>Your current Zook will remain modified in this browser tab. Switching modules does not Save or Export it.</p>
+            <div class="dialog-actions">
+              <button id="module-dirty-cancel" type="button">Cancel</button>
+              <button id="module-dirty-continue" type="button">Keep in this tab and switch</button>
+            </div>
+          </dialog>
+          <nav class="mode-strip" aria-label="Zook Kit modes">
+            <button id="mode-select" type="button" class="mode-button is-active" aria-pressed="true">Select</button>
+            <button id="mode-add" type="button" class="mode-button" aria-pressed="false">Add</button>
+            <button
+              id="mode-test"
+              type="button"
+              class="mode-button"
+              aria-pressed="false"
+            >Test</button>
+          </nav>
+          <aside class="tools" aria-label="Zook Kit tools">
+            <div class="tool-heading">
+              <p class="tools-title">Zook Kit</p>
+              <span id="part-summary">1 part</span>
+            </div>
+            <label class="compact-field" for="part-select">Selected part</label>
+            <select id="part-select" aria-label="Selected Zook part"></select>
+            <p id="document-boundary" class="document-boundary" hidden></p>
+
+            <div class="command-row" aria-label="Edit history">
+              <button id="undo-command" type="button">Undo</button>
+              <button id="redo-command" type="button">Redo</button>
+            </div>
+            <button id="file-system-command" class="wide-command" type="button">File / system</button>
+            <button id="passport-command" class="wide-command" type="button">Passport</button>
+
+            <section id="add-panel" class="tool-section" hidden>
+              <p class="section-title">add component</p>
+              <label class="compact-field" for="add-component">Body part library</label>
+              <select id="add-component"></select>
+              <p id="component-library-status" class="provisional">Checking saved body parts in this browser…</p>
+              <p class="provisional">Original catalog names are confirmed; those bodies use project-authored Provisional shapes because the legacy component bodies remain opaque. My saved body parts preserve your browser-authored branches.</p>
+              <div class="saved-component-controls">
+                <label class="compact-field" for="saved-component-name">Copied body part name</label>
+                <input id="saved-component-name" type="text" maxlength="128" autocomplete="off" />
+                <button id="save-component" type="button">Save copied body part</button>
+              </div>
+              <label class="compact-field" for="placement-parent">Attach to</label>
+              <select id="placement-parent"></select>
+              <div class="placement-grid" aria-label="Provisional keyboard surface placement">
+                <button type="button" data-placement="left">Left</button>
+                <button type="button" data-placement="right">Right</button>
+                <button type="button" data-placement="rear">Rear</button>
+                <button type="button" data-placement="below">Below</button>
+              </div>
+              <p class="provisional">Move over a parent to preview, then click to place. Keyboard directions remain available. Provisional adapter — original manipulator remains blocked.</p>
+            </section>
+
+            <div id="select-panel">
+              <div class="command-row" aria-label="Branch operations">
+                <button id="copy-command" type="button">Copy</button>
+                <button id="mirror-command" type="button">Mirror</button>
+                <button id="delete-command" type="button">Delete</button>
+              </div>
+              <section class="tool-section" aria-labelledby="shape-heading">
+                <p id="shape-heading" class="section-title">shape</p>
+                <div class="slider-grid">
+                  <label for="shape-width">Width</label><input id="shape-width" type="range" min="0.1" max="3" step="0.01" />
+                  <label for="shape-height">Height</label><input id="shape-height" type="range" min="0.1" max="3" step="0.01" />
+                  <label for="shape-length">Length</label><input id="shape-length" type="range" min="0.1" max="3" step="0.01" />
+                  <label for="shape-pointiness">Pointiness</label><input id="shape-pointiness" type="range" min="0" max="1" step="0.01" />
+                  <label for="shape-flatten-end">Flatten End</label><input id="shape-flatten-end" type="range" min="0" max="1" step="0.01" />
+                  <label for="shape-flatten-side">Flatten Side</label><input id="shape-flatten-side" type="range" min="0" max="1" step="0.01" />
+                  <label for="shape-squareness">Squareness</label><input id="shape-squareness" type="range" min="0" max="1" step="0.01" />
+                </div>
+              </section>
+              <section id="attachment-editor" class="tool-section" aria-labelledby="attachment-heading">
+                <p id="attachment-heading" class="section-title">position &amp; facing</p>
+                <p id="attachment-evidence-note" class="provisional">The original-family circle repositions and the square changes facing. These numeric controls use the labelled Provisional parent-local adapter; exact 115.158 drag math remains blocked.</p>
+                <fieldset class="attachment-fieldset">
+                  <legend>Circle — surface direction</legend>
+                  <div class="attachment-coordinate-grid">
+                    <label for="attachment-direction-x">X</label>
+                    <input id="attachment-direction-x" type="number" min="-1" max="1" step="0.01" />
+                    <label for="attachment-direction-y">Y</label>
+                    <input id="attachment-direction-y" type="number" min="-1" max="1" step="0.01" />
+                    <label for="attachment-direction-z">Z</label>
+                    <input id="attachment-direction-z" type="number" min="-1" max="1" step="0.01" />
+                  </div>
+                </fieldset>
+                <fieldset class="attachment-fieldset">
+                  <legend>Square — facing (degrees)</legend>
+                  <div class="attachment-coordinate-grid">
+                    <label for="attachment-facing-pitch">Pitch</label>
+                    <input id="attachment-facing-pitch" type="number" min="-180" max="180" step="1" />
+                    <label for="attachment-facing-yaw">Yaw</label>
+                    <input id="attachment-facing-yaw" type="number" min="-180" max="180" step="1" />
+                    <label for="attachment-facing-roll">Roll</label>
+                    <input id="attachment-facing-roll" type="number" min="-180" max="180" step="1" />
+                  </div>
+                </fieldset>
+                <button id="attachment-apply" type="button" aria-describedby="attachment-evidence-note">Apply position and facing</button>
+              </section>
+              <section class="tool-section" aria-labelledby="colour-heading">
+                <p id="colour-heading" class="section-title">colour</p>
+                <div class="colour-editor">
+                  <button
+                    id="appearance-colour-chart"
+                    class="colour-chart"
+                    type="button"
+                    aria-label="Colour chart. Use the pointer, or arrow keys to adjust hue and saturation."
+                    aria-describedby="colour-evidence-note"
+                  ><span id="appearance-colour-marker" aria-hidden="true"></span></button>
+                  <div>
+                    <label class="compact-field" for="appearance-colour">Exact colour</label>
+                    <input id="appearance-colour" type="color" aria-label="Exact part colour" />
+                    <label class="compact-field" for="appearance-brightness">Brightness</label>
+                    <div class="brightness-row">
+                      <input id="appearance-brightness" type="range" min="0" max="1" step="0.01" />
+                      <output id="appearance-brightness-value" for="appearance-brightness">100%</output>
+                    </div>
+                  </div>
+                </div>
+                <label class="compact-field" for="appearance-pattern">Pattern texture</label>
+                <select id="appearance-pattern" class="texture-selector" size="5" aria-describedby="colour-evidence-note"></select>
+                <p id="colour-evidence-note" class="provisional">Colour, brightness, and scrollable recolourable texture selection are confirmed. Pattern mapping is Provisional.</p>
+              </section>
+              <section class="tool-section" aria-labelledby="motion-heading">
+                <p id="motion-heading" class="section-title">motion</p>
+                <label class="compact-field" for="motion-mode">Movement</label>
+                <select id="motion-mode">
+                  <option value="none">No movement</option>
+                  <option value="single-part">Single part movement</option>
+                  <option value="two-part">Two part movement</option>
+                </select>
+                <label class="compact-field" for="movement-type">Movement Type</label>
+                <select id="movement-type">
+                  <option value="auto">Auto</option>
+                  <option value="always">Always</option>
+                  <option value="left-side">Left side</option>
+                  <option value="right-side">Right side</option>
+                </select>
+                <button id="tutorial-triangle" type="button">Triangle path</button>
+                <fieldset id="motion-path-editor" class="path-editor" hidden>
+                  <legend>Path points</legend>
+                  <label class="compact-field" for="motion-point-select">Ordered point</label>
+                  <select id="motion-point-select" aria-label="Ordered motion point"></select>
+                  <div class="path-coordinate-grid">
+                    <label for="motion-point-x">X</label>
+                    <input id="motion-point-x" aria-label="Path point X" type="number" min="-10" max="10" step="0.01" />
+                    <label for="motion-point-y">Y</label>
+                    <input id="motion-point-y" aria-label="Path point Y" type="number" min="-10" max="10" step="0.01" />
+                    <label for="motion-point-z">Z</label>
+                    <input id="motion-point-z" aria-label="Path point Z" type="number" min="-10" max="10" step="0.01" />
+                  </div>
+                  <button id="motion-point-apply" class="path-apply" type="button">Apply coordinates</button>
+                  <div class="command-row">
+                    <button id="motion-point-insert" type="button">Insert after</button>
+                    <button id="motion-point-remove" type="button">Remove point</button>
+                  </div>
+                  <p class="path-help">Drag a white point in the flat path plane, or click a path segment to insert. Numeric coordinates are the keyboard alternative.</p>
+                </fieldset>
+                <label class="compact-field" for="movement-phase">Movement Cycle</label>
+                <input id="movement-phase" type="range" min="0" max="1" step="0.001" />
+                <label class="compact-field" for="part-targeting">Part Targeting</label>
+                <select id="part-targeting">
+                  <option value="normal">Normal</option>
+                  <option value="inverted">Inverted</option>
+                  <option value="off">Off</option>
+                </select>
+                <div class="slider-grid root-motion-grid">
+                  <label for="cycle-speed">Cycle Speed</label><input id="cycle-speed" type="range" min="0" max="1" step="0.01" />
+                  <label for="turn-sharpness">Turn Sharpness</label><input id="turn-sharpness" type="range" min="0" max="1" step="0.01" />
+                  <label for="turn-smoothness">Turn Smoothness</label><input id="turn-smoothness" type="range" min="0" max="1" step="0.01" />
+                  <label for="part-targeting-angle">Part Targeting Angle</label><input id="part-targeting-angle" type="range" min="0" max="3.14159" step="0.01" />
+                </div>
+              </section>
+            </div>
+            <section id="test-panel" class="tool-section test-panel" hidden aria-labelledby="test-heading">
+              <p id="test-heading" class="section-title">Test</p>
+              <p class="provisional-play">Provisional Play Mode</p>
+              <p class="test-copy">Attached Rapier joints and motors reconstruct the design-test loop. Historical dynamics remain blocked.</p>
+              <dl>
+                <div><dt>Test state</dt><dd id="test-pose-value">Grounded</dd></div>
+                <div><dt>Target</dt><dd id="test-target-value">Not placed</dd></div>
+              </dl>
+              <fieldset class="environment-controls">
+                <legend>Environment</legend>
+                <label for="test-environment">Original environment name</label>
+                <select id="test-environment"></select>
+                <output id="test-environment-status" for="test-environment"></output>
+              </fieldset>
+              <p class="test-copy">All ten names are recovered from the original payload. The original <code>.sax</code> definitions are opaque; any visible orientation aid is explicitly Provisional and has no trial rules or collision.</p>
+              <fieldset class="environment-controls trial-controls">
+                <legend>Formal trial</legend>
+                <label for="test-trial">Original trial name</label>
+                <select id="test-trial"></select>
+                <output id="test-trial-status" for="test-trial"></output>
+                <div class="provisional-trial-buttons" role="group" aria-label="Provisional trial controls">
+                  <button id="provisional-trial-run" type="button">Run Provisional trial</button>
+                  <button id="provisional-trial-stop" type="button" aria-label="Stop Provisional trial" disabled>Stop</button>
+                  <button id="provisional-trial-reset" type="button" aria-label="Reset Provisional trial" disabled>Reset</button>
+                  <button id="provisional-trial-retain" type="button" disabled>Retain result</button>
+                </div>
+                <output id="provisional-trial-status" aria-live="polite">No Provisional trial prepared.</output>
+              </fieldset>
+              <fieldset class="test-timer-controls">
+                <legend>Test timer</legend>
+                <div class="test-timer-display">
+                  <span>Elapsed</span>
+                  <output id="test-timer-value" role="timer" aria-label="Elapsed Test time">0.000 s</output>
+                </div>
+                <div class="test-timer-buttons" role="group" aria-label="Test timer controls">
+                  <button id="test-timer-start" type="button">Start</button>
+                  <button id="test-timer-stop" type="button" disabled>Stop</button>
+                  <button id="test-timer-reset" type="button" disabled>Reset</button>
+                </div>
+                <output id="test-timer-status" aria-live="polite">Stopped at zero.</output>
+              </fieldset>
+              <p class="test-copy">Manual fixed-tick reconstruction timer. SprintEnv's automatic start/finish contract is documented, but its opaque triggers remain unimplemented; this timer creates no trial or Passport result.</p>
+              <fieldset class="target-controls">
+                <legend>Numeric floor target</legend>
+                <label for="test-target-x">X</label>
+                <input id="test-target-x" type="number" min="-10" max="10" step="0.1" value="0" />
+                <label for="test-target-z">Z</label>
+                <input id="test-target-z" type="number" min="-10" max="10" step="0.1" value="2" />
+                <button id="test-target-set" type="button">Move target</button>
+              </fieldset>
+              <p class="test-copy">Left-click the checker floor to place the red target. The Zook turns by changing side-cycle rates.</p>
+              <fieldset class="camera-controls">
+                <legend>Camera</legend>
+                <div class="camera-mode-row" role="group" aria-label="Camera mode">
+                  <button id="camera-free" type="button" aria-pressed="true">Free</button>
+                  <button id="camera-follow" type="button" aria-pressed="false">Follow</button>
+                  <button id="camera-cool" type="button" aria-pressed="false">Cool</button>
+                </div>
+                <div class="camera-state-row">
+                  <span>Current</span><strong id="camera-mode-value">Free</strong>
+                  <button id="camera-home" type="button">Home reset</button>
+                </div>
+              </fieldset>
+              <p class="test-copy">Right-drag to reorient and use the wheel or +/− to zoom. Exact movement rates, limits, and Cool framing are Provisional.</p>
+              <div class="test-view-actions" aria-label="Test view">
+                <button id="test-background-toggle" type="button">Hide background</button>
+                <button id="test-ui-toggle" type="button">Hide Test UI</button>
+              </div>
+              <p class="test-copy">Ctrl-B toggles background images. Ctrl-U toggles the Test UI.</p>
+              <button id="test-pose-toggle" type="button">Return to start and float</button>
+              <p class="test-copy">Use the configured Test pose key (Space by default) to toggle floating inspection and the ground.</p>
+              <fieldset class="test-snapshot-controls">
+                <legend>Passport photograph</legend>
+                <button id="test-snapshot-command" type="button">Take Passport snapshot</button>
+                <output id="test-snapshot-status" aria-live="polite">Camera capture is ready.</output>
+              </fieldset>
+              <p class="test-copy">The original compare-and-Replace interaction is confirmed. This browser capture is a disclosed 512 × 384 reconstruction, not a claim about the original pixels.</p>
+              <fieldset class="test-replay-controls">
+                <legend>Preservation replay</legend>
+                <button id="test-replay-start" type="button">Start Test recording</button>
+                <button id="test-replay-stop" type="button" disabled>Stop and save replay</button>
+                <output id="test-replay-status">Not recording. This browser-native format is separate from original .bvz files.</output>
+              </fieldset>
+            </section>
+            <details class="gate-details">
+              <summary>Build status</summary>
+              <dl>
+                <div><dt>Build</dt><dd>115.158</dd></div>
+                <div><dt>Physics tick</dt><dd id="tick-value">0</dd></div>
+                <div><dt>Fixture</dt><dd id="motion-value">ready</dd></div>
+              </dl>
+            </details>
+          </aside>
+          <dialog id="file-system-dialog" class="file-confirm file-system-dialog" aria-labelledby="file-system-title">
+            <h2 id="file-system-title">File / system</h2>
+            <p class="file-system-boundary">Original v3.1 command order. Browser storage and downloads replace Windows files; retired network services are not contacted.</p>
+            <div class="file-system-actions" aria-label="File and system commands">
+              <button id="file-system-new" type="button">New</button>
+              <button id="file-system-open" type="button">Open</button>
+              <button id="save-zook" type="button">Save</button>
+              <button id="file-system-save-as" type="button">Save As</button>
+              <button id="export-zook" type="button">Export</button>
+              <button id="file-system-send" type="button">Send to CBBC</button>
+              <button id="file-system-passport" type="button">Passport</button>
+              <button id="file-system-website" type="button">Website</button>
+              <button id="file-system-update" type="button">Online Update</button>
+              <button id="file-system-exit" type="button">Exit</button>
+              <button id="file-system-cancel" type="button">Cancel</button>
+            </div>
+            <p id="file-system-status" class="file-system-status" role="status" aria-live="polite">Choose a command.</p>
+          </dialog>
+          <dialog id="exact-slider-dialog" class="file-confirm exact-slider-dialog" aria-labelledby="exact-slider-title">
+            <form id="exact-slider-form">
+              <h2 id="exact-slider-title">Exact slider value</h2>
+              <p>Original-family interaction: right-click a slider to enter a number.</p>
+              <label class="exact-slider-field" for="exact-slider-value">
+                <span id="exact-slider-label">Value</span>
+                <input id="exact-slider-value" type="number" required />
+              </label>
+              <div class="dialog-actions">
+                <button id="exact-slider-cancel" type="button">Cancel</button>
+                <button id="exact-slider-apply" type="submit">Apply</button>
+              </div>
+            </form>
+          </dialog>
+          <dialog id="loader-replace-confirm" class="file-confirm" aria-labelledby="loader-replace-title">
+            <h2 id="loader-replace-title">Discard unsaved changes?</h2>
+            <p>Loading a new or example Zook replaces the current unsaved editor state.</p>
+            <div class="dialog-actions">
+              <button id="loader-replace-cancel" type="button">Cancel</button>
+              <button id="loader-replace-discard" type="button">Discard changes</button>
+            </div>
+          </dialog>
+          <dialog id="loader-delete-confirm" class="file-confirm" aria-labelledby="loader-delete-title">
+            <h2 id="loader-delete-title">Delete this local Zook?</h2>
+            <p id="loader-delete-copy">This removes the selected browser-stored Zook. Export it first if you need a recoverable copy.</p>
+            <div class="dialog-actions">
+              <button id="loader-delete-cancel" type="button">Cancel</button>
+              <button id="loader-delete-confirm-button" type="button">Delete local Zook</button>
+            </div>
+          </dialog>
+          <dialog id="loader-repair-confirm" class="file-confirm" aria-labelledby="loader-repair-title">
+            <h2 id="loader-repair-title">Remove corrupt local records?</h2>
+            <p>Recoverable indexes are rebuilt from valid canonical data. Only unrecoverable records that fail schema, checksum, linkage, or photograph validation are removed.</p>
+            <div class="dialog-actions">
+              <button id="loader-repair-cancel" type="button">Cancel</button>
+              <button id="loader-repair-confirm-button" type="button">Remove corrupt records</button>
+            </div>
+          </dialog>
+          <dialog id="help-dialog" class="file-confirm help-dialog" aria-labelledby="help-dialog-title">
+            <h2 id="help-dialog-title">How to make a Zook</h2>
+            <div id="help-private-visual" class="help-private-visual" hidden></div>
+            <ol>
+              <li>Start with the root Zook and add a Blob.</li>
+              <li>Stretch the new part and choose two-part movement.</li>
+              <li>Arrange its movement points into a simple triangle.</li>
+              <li>Attach the leg to the body, then Copy and Mirror it.</li>
+              <li>Adjust Movement Cycle, enter Test, and use the configured Test pose key (Space by default) to inspect the Zook.</li>
+            </ol>
+            <dl class="version-list">
+              <div><dt>Original target</dt><dd>BAMZOOKi v3.1, build 115.158</dd></div>
+              <div><dt>This software</dt><dd>Evidence-bounded browser reconstruction</dd></div>
+            </dl>
+            <p class="help-note">The workflow and shortcut are confirmed from the original manual and bundled tutorial. Browser physics and unresolved historical behavior remain visibly Provisional.</p>
+            <div class="dialog-actions">
+              <button id="help-close" type="button">Close</button>
+            </div>
+          </dialog>
+          <dialog id="test-snapshot-dialog" class="file-confirm test-snapshot-dialog" aria-labelledby="test-snapshot-title">
+            <h2 id="test-snapshot-title">Compare Passport photograph</h2>
+            <p>Compare the current Passport photograph with the new Test camera capture.</p>
+            <div class="test-snapshot-comparison">
+              <figure>
+                <figcaption>Current Passport photograph</figcaption>
+                <img id="test-snapshot-current-image" alt="Current Passport photograph" hidden />
+                <p id="test-snapshot-current-copy">No current Passport photograph.</p>
+              </figure>
+              <figure>
+                <figcaption>New snapshot</figcaption>
+                <img id="test-snapshot-new-image" alt="New Passport snapshot" hidden />
+                <p id="test-snapshot-new-copy">Waiting for camera capture.</p>
+              </figure>
+            </div>
+            <p class="passport-boundary">Replace changes only the canonical Passport photograph reference. Return to Select to Undo it.</p>
+            <div class="dialog-actions test-snapshot-actions">
+              <button id="test-snapshot-cancel" type="button">Cancel</button>
+              <button id="test-snapshot-retake" type="button">Take another</button>
+              <button id="test-snapshot-replace" type="button">Replace</button>
+            </div>
+          </dialog>
+          <dialog id="passport-dialog" class="passport-dialog" aria-labelledby="passport-title">
+            <header class="passport-heading">
+              <div><p>Original v3.1 product surface</p><h2 id="passport-title">Passport</h2></div>
+              <button id="passport-close" type="button">Close</button>
+            </header>
+            <div class="passport-tabs" role="tablist" aria-label="Passport sections">
+              <button id="passport-tab-general" type="button" role="tab" data-passport-tab="general" aria-controls="passport-panel" aria-selected="true">General</button>
+              <button id="passport-tab-hologram" type="button" role="tab" data-passport-tab="hologram" aria-controls="passport-panel" aria-selected="false">Hologram</button>
+              <button id="passport-tab-history" type="button" role="tab" data-passport-tab="history" aria-controls="passport-panel" aria-selected="false">History</button>
+              <button id="passport-tab-physical" type="button" role="tab" data-passport-tab="physical" aria-controls="passport-panel" aria-selected="false">Physical</button>
+              <button id="passport-tab-achievement" type="button" role="tab" data-passport-tab="achievement" aria-controls="passport-panel" aria-selected="false">Achievement</button>
+            </div>
+            <section id="passport-panel" class="passport-panel" role="tabpanel" aria-labelledby="passport-tab-general"></section>
+            <footer class="passport-footer">
+              <button id="passport-internet" type="button" disabled>View internet passport</button>
+              <p id="passport-status" role="status">Local browser Passport. No network request is made.</p>
+            </footer>
+          </dialog>
+          <p id="editor-announcement" class="visually-hidden" aria-live="polite"></p>
+          <div id="private-mark" class="private-mark" hidden></div>
+          <p class="publication-disclaimer" role="note">
+            Unofficial reconstruction; not affiliated with or endorsed by the BBC or Gameware. Original names belong to their respective owners. Gameplay approximations are labelled Provisional.
+          </p>
+        </div>
+        <button id="test-ui-restore" class="test-ui-restore" type="button" hidden>Show Test controls (Ctrl-U)</button>
+      </section>
+      <section id="capability-error" class="capability-error" role="alert" hidden>
+        <h2>This reconstruction cannot start</h2>
+        <p id="capability-message"></p>
+      </section>
+      <p class="small-screen-message" role="status">
+        BAMZOOKi's editor requires a desktop-sized window of at least 800 × 600 pixels.
+      </p>
+    </main>
+  </body>
+</html>
