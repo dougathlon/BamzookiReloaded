@@ -112,13 +112,29 @@ const cameraGestures = async (kind) => {
   const previews = page.locator(simulator ? "#simulator-camera-preview-canvas" : "#motion-camera-preview-canvas");
   const neutralControl = page.locator("#modules-command");
   const button = (id) => page.locator(`[data-${simulator ? "simulator" : "motion"}-camera="camera-${id}"]`);
-  const pixels = async (element) => {
+  const observations = [];
+  const pixels = async (element, name) => {
     // Compare the same focus/hover state; the canvas focus ring and miniature
     // button overlays are intentional accessibility UI, not camera movement.
     await neutralControl.focus();
     await neutralControl.hover();
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    return createHash("sha256").update(await element.screenshot()).digest("hex");
+    const buffer = await element.screenshot(name === undefined ? {} : {
+      path: path.join(output, `${engine}-${kind}-${name}.png`),
+    });
+    const hash = createHash("sha256").update(buffer).digest("hex");
+    if (name !== undefined) {
+      observations.push({ name, hash, surface: await element.evaluate((canvas) => ({
+        width: canvas.width, height: canvas.height,
+        rect: canvas.getBoundingClientRect().toJSON(),
+        scrollTop: canvas.closest(".module-surface").scrollTop,
+        tick: document.querySelector("#motion-time").textContent,
+        focus: document.activeElement.id,
+      })) });
+      await writeFile(path.join(output, `${engine}-${kind}-camera-observations.json`),
+        JSON.stringify(observations, null, 2));
+    }
+    return hash;
   };
   const drag = async (element, zoom) => {
     await element.scrollIntoViewIfNeeded();
@@ -134,7 +150,7 @@ const cameraGestures = async (kind) => {
   };
   await button(1).click();
   await canvas.press("Home");
-  const mainDefault = await pixels(canvas);
+  const mainDefault = await pixels(canvas, "main-default");
   await drag(canvas, false);
   const mainRotated = await pixels(canvas);
   assert.notEqual(mainRotated, mainDefault, "Main right-drag must visibly rotate the view");
@@ -143,14 +159,14 @@ const cameraGestures = async (kind) => {
   assert.notEqual(await pixels(canvas), mainRotated, "Main wheel must visibly zoom without a held button");
   await shot(`${kind}-main-camera-adjusted`);
   await canvas.press("Home");
-  assert.equal(await pixels(canvas), mainDefault, "Home must restore the exact default main view");
+  assert.equal(await pixels(canvas, "main-after-home"), mainDefault, "Home must restore the exact default main view");
   const miniatureDefault = await pixels(previews);
   await button(3).hover();
   await page.mouse.wheel(0, -100);
   assert.equal(await pixels(previews), miniatureDefault, "Unmodified miniature wheel must not zoom");
   await drag(button(3), true);
   await expect(button(1)).toHaveAttribute("aria-pressed", "true");
-  assert.equal(await pixels(canvas), mainDefault, "Non-selected miniature must not change the main view");
+  assert.equal(await pixels(canvas, "main-after-miniature"), mainDefault, "Non-selected miniature must not change the main view");
   assert.notEqual(await pixels(previews), miniatureDefault, "Miniature right-drag/wheel must change its view");
   await shot(`${kind}-miniature-camera-adjusted`);
   await button(3).press("Home");
