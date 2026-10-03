@@ -65,6 +65,9 @@ await context.route("**/*", (route) => {
 });
 const shot = async (name) => {
   reportProgress(`Screenshot ${name}: start`);
+  // Control text updates before the canvas's next render; observe two frames
+  // so a newly selected camera and its captured scene describe the same state.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.screenshot({ path: path.join(output, `${engine}-${name}.png`), fullPage: true });
   reportProgress(`Screenshot ${name}: saved`);
 };
@@ -139,10 +142,12 @@ const priorHurdlesFixture = (base, version) => {
   const replay = structuredClone(base);
   replay.title = `Synthetic Hurdles browser profile v${version}`;
   replay.arena.profileId = `classic31-provisional-super-hurdles-play-v${version}`;
-  replay.arena.movingObjectIds = [...ids.values()].sort((a, b) => a.localeCompare(b));
-  replay.keyframes = replay.keyframes.map((frame) => signed({
-    ...frame, arenaPoses: frame.arenaPoses.map((pose) => ({ ...pose, id: ids.get(pose.id) })).sort((a, b) => a.id.localeCompare(b.id)),
-  }));
+  if (version <= 2) {
+    replay.arena.movingObjectIds = [...ids.values()].sort((a, b) => a.localeCompare(b));
+    replay.keyframes = replay.keyframes.map((frame) => signed({
+      ...frame, arenaPoses: frame.arenaPoses.map((pose) => ({ ...pose, id: ids.get(pose.id) })).sort((a, b) => a.id.localeCompare(b.id)),
+    }));
+  }
   return JSON.stringify(ordered(signed(replay)));
 };
 
@@ -374,6 +379,11 @@ try {
     await expect.poll(async () => await page.locator("#simulator-save-dialog").isVisible() ||
       Number.parseFloat(await page.locator("#simulator-time").innerText()) >= 0.5, { timeout: 40_000 }).toBe(true);
     if (index === 5 || index === 6 || index === 8) await shot(`contest-${index}`);
+    if (index === 8) {
+      reportProgress("Hurdles: waiting for automatic contest completion");
+      await expect(page.locator("#simulator-save-dialog")).toBeVisible({ timeout: 120_000 });
+      await shot("hurdles-automatic-end");
+    }
     if (await page.locator("#simulator-stop").isVisible()) {
       await page.locator("#simulator-stop").click({ timeout: 2000 }).catch(async (error) => {
         if (!await page.locator("#simulator-save-dialog").isVisible()) throw error;
@@ -418,25 +428,28 @@ try {
     const count = replay.arena.movingObjectIds.length + replay.arena.dynamicObjectIds.length;
     assert.equal(count, index === 3 ? 1 : index === 5 ? 58 : index === 8 ? 49 : 61);
     if (index === 8) {
-      assert.equal(replay.arena.profileId, "classic31-provisional-super-hurdles-play-v3");
+      assert.equal(replay.arena.profileId, "classic31-provisional-super-hurdles-play-v4");
       assert.ok(replay.arena.movingObjectIds.every((id) => /^hurdles-agent-\d+$/.test(id)));
       const cylinder25 = replay.keyframes[0].arenaPoses.find(({ id }) => id === "hurdles-agent-25");
       assert.equal(cylinder25.translation.y, Math.fround(Math.fround(0.3 * 0.08) + Math.fround(-1.5 * 0.08)));
-      const canvasHash = async () => createHash("sha256").update(await page.locator("#motion-canvas").screenshot()).digest("hex");
+      const canvasHash = async () => {
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        return createHash("sha256").update(await page.locator("#motion-canvas").screenshot()).digest("hex");
+      };
       await page.locator("#motion-loop").uncheck();
       await page.locator("#motion-timeline").press("Home");
       await page.locator('button[data-motion-camera="camera-3"]').click();
       const currentPixels = await canvasHash();
       let legacyPixels;
-      for (const version of [1, 2, 3]) {
-        if (version === 3) {
+      for (const version of [1, 2, 3, 4]) {
+        if (version === 4) {
           await page.locator("#motion-replay-library").selectOption(await option.getAttribute("value"));
           await page.locator("#motion-load").click();
         } else {
           const data = priorHurdlesFixture(replay, version);
           await page.locator("#motion-open-input").setInputFiles({ name: "compatibility.bamz-replay.json", mimeType: "application/json", buffer: Buffer.from(data) });
         }
-        await expect(page.locator("#motion-replay-title")).toHaveText(version === 3 ? title : `Synthetic Hurdles browser profile v${version}`);
+        await expect(page.locator("#motion-replay-title")).toHaveText(version === 4 ? title : `Synthetic Hurdles browser profile v${version}`);
         await page.locator("#motion-timeline").press("Home");
         await page.locator('button[data-motion-camera="camera-3"]').click();
         if (version === 1) {
@@ -445,7 +458,10 @@ try {
           await shot("hurdles-legacy-replay");
         } else await expect.poll(canvasHash).toBe(version === 2 ? legacyPixels : currentPixels);
       }
-      recordCheck("Hurdles: same-scene v3/v1/v2/v3 replay switches preserve profile-specific geometry");
+      assert.equal(replay.outcome, null);
+      assert.ok(replay.keyframes.every((frame) => frame.participants.every(({ snapshot }) =>
+        snapshot.bodies.every(({ translation }) => Object.values(translation).every((value) => Math.abs(value) <= 1000)))));
+      recordCheck("Hurdles: automatic end, bounded replay and same-scene v4/v1/v2/v3/v4 geometry switches");
     }
     assert.ok(replay.durationTicks >= 30);
     assert.ok(replay.keyframes.every((frame) => frame.arenaPoses.length === count));
@@ -456,7 +472,7 @@ try {
   await page.reload();
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
   await module("motion-player");
-  await expect(page.locator("#motion-replay-library option")).toHaveCount(6);
+  await expect(page.locator("#motion-replay-library option")).toHaveCount(7);
   recordCheck("Replay library survives a browser-page reload");
 
   await module("zook-kit");
