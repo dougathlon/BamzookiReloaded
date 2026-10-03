@@ -13,6 +13,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - name: Check out static distribution
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify the release boundary
+        run: node .github/scripts/verify-release.mjs
+
+      - name: Install pinned browser test tools outside the distribution
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser-check" --ignore-scripts --no-package-lock playwright@1.62.1 @axe-core/playwright@4.13.0
+          "$RUNNER_TEMP/browser-check/node_modules/.bin/playwright" install --with-deps "${{ matrix.browser }}"
+
+      - name: Play the compiled release
+        env:
+          BROWSER_TEST_RUNTIME: ${{ runner.temp }}/browser-check
+          BROWSER_TEST_ENGINE: ${{ matrix.browser }}
+          BROWSER_TEST_OUTPUT: ${{ runner.temp }}/browser-results
+        run: node .github/scripts/smoke-test.mjs
+
+      - name: Retain public-game screenshots and test summary
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: browser-check-${{ matrix.browser }}
+          path: ${{ runner.temp }}/browser-results
+          retention-days: 7
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +76,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, browser-check]
     steps:
       - name: Deploy audited artifact
         id: deployment

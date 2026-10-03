@@ -2,19 +2,24 @@
   "schema": "bamzooki.public-release.v1",
   "files": [
     {
+      "path": ".github/scripts/smoke-test.mjs",
+      "bytes": 8546,
+      "sha256": "48a2718791e7783a02e19e6ba0f5aa7280ea997fd9169191d66dbfe8b99f6616"
+    },
+    {
       "path": ".github/scripts/verify-release.mjs",
-      "bytes": 4294,
-      "sha256": "ee2bfa7720ef3a9f08d607f7b17bdc96c0a910999896516137ece24faabdeacc"
+      "bytes": 4775,
+      "sha256": "d0381a88518605b53cb8d06ae1c64e627a3464851114fbe6e6aacfa14cd1d771"
     },
     {
       "path": ".github/workflows/pages.yml",
-      "bytes": 1012,
-      "sha256": "6823c903949df522760915470382b2ff109b848f7e3760da3da7132f0e246255"
+      "bytes": 2329,
+      "sha256": "d60a48cb7ebc451ef5199930867cbaf216713d09cb9888a1c0f0393b62447c99"
     },
     {
       "path": "README.md",
-      "bytes": 1864,
-      "sha256": "71c993761b934b001b8399de29886d764f94acebf5612125fc4a1a0d36570be0"
+      "bytes": 2628,
+      "sha256": "ae0b6c873600d779047523f3b5fbafd89d9d78020144c29b0fd89c741645fb27"
     },
     {
       "path": "site/.nojekyll",
@@ -22,19 +27,19 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "path": "site/assets/index-9vkxHnB4.js",
-      "bytes": 3809854,
-      "sha256": "c4d244d67ad36163b529630ed64153b5755d1e40fa1429e7ef4aa0e56c0bb8be"
+      "path": "site/assets/index-BSkjXrNV.js",
+      "bytes": 3822684,
+      "sha256": "2acec27403dbbeff8d9d519db474c54829fd881027cf7200cfaf8772cf221fe2"
     },
     {
-      "path": "site/assets/index-DdeWmqhs.css",
-      "bytes": 30221,
-      "sha256": "b3f8303835425c3879fb2f95c2b2169fc12ba01caa9303cd38506de0dca0679e"
+      "path": "site/assets/index-DqEiFKeM.css",
+      "bytes": 30524,
+      "sha256": "6c1ebe5ccb5a56db52d72332f1697fcfb412eb5aa1ebd76724d385dda46b3f72"
     },
     {
       "path": "site/index.html",
-      "bytes": 48668,
-      "sha256": "074a209095e148377be839d0894af935f3f48800b04a4714d128d8885992a975"
+      "bytes": 48906,
+      "sha256": "46d830474734be25ef87e382bac33109d27c012264bc9322701fc79876a43250"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",

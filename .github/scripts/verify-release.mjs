@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const fixedFiles = new Set([
   "README.md", ".github/workflows/pages.yml", ".github/scripts/verify-release.mjs",
+  ".github/scripts/smoke-test.mjs",
   "site/index.html", "site/.nojekyll", "site/THIRD_PARTY_NOTICES.txt",
 ]);
 
@@ -31,7 +32,7 @@ export function assertPublicText(text, relative) {
 async function listFiles(root, relative = "") {
   const files = [];
   for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
-    if (relative === "" && entry.name === ".git") continue;
+    if (relative === "" && entry.name === ".git" && entry.isDirectory()) continue;
     const name = relative ? `${relative}/${entry.name}` : entry.name;
     if (entry.isSymbolicLink()) throw new Error(`Public release contains a symbolic link: ${name}`);
     if (entry.isDirectory()) files.push(...await listFiles(root, name));
@@ -41,9 +42,13 @@ async function listFiles(root, relative = "") {
   return files.sort();
 }
 
-export async function auditPublicRelease(root) {
+export async function auditPublicRelease(root, { allowPreviousRelease = false } = {}) {
   const manifest = JSON.parse(await readFile(path.join(root, "release-manifest.json"), "utf8"));
-  if (manifest.schema !== "bamzooki.public-release.v1" || !Array.isArray(manifest.files)) {
+  if (manifest === null || typeof manifest !== "object" ||
+      Object.keys(manifest).sort().join(",") !== "files,schema" ||
+      manifest.schema !== "bamzooki.public-release.v1" || !Array.isArray(manifest.files) ||
+      manifest.files.some((entry) => entry === null || typeof entry !== "object" ||
+        Object.keys(entry).sort().join(",") !== "bytes,path,sha256")) {
     throw new Error("Public release manifest is invalid");
   }
   const actual = await listFiles(root);
@@ -51,7 +56,8 @@ export async function auditPublicRelease(root) {
   if (expected.length > 40 || new Set(expected).size !== expected.length ||
       expected.some((name) => !isPublicReleaseFile(name)) ||
       actual.join("\n") !== [...expected, "release-manifest.json"].sort().join("\n") ||
-      [...fixedFiles].some((name) => !expected.includes(name))) {
+      [...fixedFiles].some((name) => !expected.includes(name) &&
+        !(allowPreviousRelease && name === ".github/scripts/smoke-test.mjs"))) {
     throw new Error("Public release contains an unapproved, missing, or duplicate file");
   }
   let totalBytes = 0;
@@ -62,7 +68,7 @@ export async function auditPublicRelease(root) {
       throw new Error(`Public release integrity mismatch: ${entry.path}`);
     }
     totalBytes += bytes.length;
-    if (entry.path.startsWith("site/") && !entry.path.endsWith(".wasm")) {
+    if (entry.path !== ".github/scripts/verify-release.mjs" && !entry.path.endsWith(".wasm")) {
       assertPublicText(bytes.toString("utf8"), entry.path);
     }
   }

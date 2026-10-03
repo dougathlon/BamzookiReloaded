@@ -6,6 +6,15 @@ An unofficial browser reconstruction of the original BAMZOOKi creature-building 
 
 Use a desktop browser with WebGL2 and WebAssembly, at a window size of at least 800 × 600. Zooks and replays save to this browser on this device; export your work to keep an independent backup. There are no accounts or online leaderboards.
 
+## Start playing
+
+1. In the Zook Loader, choose **Try a walking Zook**. This loads an editable, nine-part tutorial creature.
+2. Choose **Test**, place a target, or run one of the five provisional trials. Return to **Select** to alter its body and movement.
+3. Open **Modules → Simulator**, pick a contest, and choose the Tutorial Walker or your current Zook for each contestant. All nine pack entries have provisional playable rules.
+4. After a contest, save its replay and open **Modules → Motion Player**. Replays include both Zooks and moving arena objects, and support cameras, playback, looping, scrubbing, and export.
+
+The creatures move autonomously according to their construction and movement settings; this is not a keyboard-controlled racing game.
+
 The six historical example names retain their recovered catalog metadata, but their original bodies are not decoded. Gameplay marked **Provisional Play Mode** uses reconstruction rules and physics, not historically verified results. Legacy `.Zook` and `.bvz` files are not supported imports. Browser exports use distinct modern formats.
 
 ## Disclaimer
