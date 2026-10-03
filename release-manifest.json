@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 87941,
-      "sha256": "e2cfeae3c5f7717e8f948583d2c648a3baa4105669cfdf19c030f91e3542b8cc"
+      "bytes": 102740,
+      "sha256": "d46df0cc76077d237de79074bb6bf72e5997c2af2d324c7bc6f50672320222a5"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
@@ -13,13 +13,13 @@
     },
     {
       "path": ".github/workflows/pages.yml",
-      "bytes": 2632,
-      "sha256": "6f48b518e0db06ec9ff9e6f557caaecd9736f4c34d7ac50b8c7fb8a3b8c6db39"
+      "bytes": 2688,
+      "sha256": "f68bb8f2fd88bce4689505d9e319a0a9fc675c71b1f43127ede8fb1760be2b55"
     },
     {
       "path": "README.md",
-      "bytes": 4724,
-      "sha256": "177e696736bc36684fa9d65b3981a71d64a32e5d09138ccf68995b7f2edb546c"
+      "bytes": 5389,
+      "sha256": "446737571ae32dd49b2e285040c85ada7f06b2ea1286420499eb9bd1bfb8438d"
     },
     {
       "path": "site/.nojekyll",

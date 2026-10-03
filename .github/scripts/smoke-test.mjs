@@ -13,7 +13,7 @@ const { default: AxeBuilder } = require("@axe-core/playwright");
 const engine = process.env.BROWSER_TEST_ENGINE ?? "chromium";
 assert.ok(["chromium", "firefox", "webkit"].includes(engine), "Unsupported browser test engine");
 const suite = process.env.BROWSER_TEST_SUITE;
-assert.ok(["contests", "editor", "trial-focus", "storage"].includes(suite), "Unsupported browser test suite");
+assert.ok(["contests", "editor", "trial-focus", "storage", "browser-recovery"].includes(suite), "Unsupported browser test suite");
 const output = path.resolve(process.env.BROWSER_TEST_OUTPUT ?? "browser-results");
 const site = await realpath("site");
 const prefix = "/BamzookiReloaded/";
@@ -1484,15 +1484,260 @@ const storageJourney = async () => {
   } finally { if (!peer.isClosed()) await peer.close(); }
 };
 
+const browserRecoveryJourney = async () => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`${origin}${prefix}`);
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.locator("#loader-tutorial").click();
+  await expect(page.locator("#part-summary")).toHaveText("9 parts");
+  const original = await exportZook();
+  await page.getByLabel("Width", { exact: true }).fill("0.77");
+  const changed = await exportZook();
+  assert.notEqual(changed, original);
+  await page.setViewportSize({ width: 760, height: 560 });
+  await expect(page.locator(".shell")).toBeHidden();
+  await expect(page.locator(".small-screen-message")).toHaveText(
+    "BAMZOOKi's editor requires a desktop-sized window of at least 800 × 600 pixels.");
+  await accessibility("Small-window recovery message");
+  await shot("small-window-fallback");
+
+  for (const viewport of [
+    { width: 800, height: 600 }, { width: 1024, height: 768 }, { width: 1280, height: 720 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(page.locator(".small-screen-message")).toBeHidden();
+    await expect(page.locator(".shell")).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const bounds = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+      return { shell: bounds(".shell"), logo: bounds(".brand-strip > div:first-child"),
+        controls: ["#modules-command", "#loader-command", "#input-settings-command", "#help-command",
+          "#fullscreen-command", "#build-status"].map(selector => ({ selector, ...bounds(selector) })) };
+    });
+    assert.ok(Math.abs(layout.shell.width / layout.shell.height - 4 / 3) < 0.002, "Shell must retain 4:3");
+    for (const [index, control] of layout.controls.entries()) {
+      assert.ok(control.left >= layout.shell.left && control.right <= layout.shell.right &&
+        control.top >= layout.shell.top && control.bottom <= layout.shell.bottom, `${control.selector} must fit the shell`);
+      if (index < 5) assert.ok(control.left >= layout.logo.right, `${control.selector} must not overlap the title`);
+      for (const other of layout.controls.slice(index + 1)) assert.ok(
+        !(control.left < other.right && other.left < control.right && control.top < other.bottom && other.top < control.bottom),
+        `${control.selector} must not overlap ${other.selector}`);
+    }
+    assert.equal(await exportZook(), changed, "Resize must preserve exact unsaved document bytes");
+  }
+  await shot("short-desktop-recovered");
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.locator("#undo-command").click();
+  assert.equal(await exportZook(), original, "Resize must preserve Undo history");
+  await page.locator("#redo-command").click();
+  assert.equal(await exportZook(), changed, "Resize must preserve Redo history");
+  recordCheck("Resize: small-window fallback, three 4:3 layouts, non-overlapping header and exact dirty-document Undo/Redo recovery");
+
+  const settingsCommand = page.locator("#input-settings-command");
+  const settings = page.locator("#input-settings-dialog");
+  const forward = settings.getByLabel("Camera forward / Follow closer", { exact: true });
+  const back = settings.getByLabel("Camera back / Follow farther", { exact: true });
+  const pose = settings.getByLabel("Ground / suspend Zook in Test", { exact: true });
+  await settingsCommand.click();
+  await expect(forward).toBeFocused();
+  await expect(forward).toHaveValue("KeyW");
+  await expect(pose).toHaveValue("Space");
+  await forward.selectOption("KeyI");
+  await back.selectOption("KeyI");
+  await settings.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("cannot use the same key");
+  await accessibility("Input settings validation");
+  await shot("input-settings-conflict");
+  await back.selectOption("KeyS");
+  await pose.selectOption("KeyP");
+  await settings.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("saved in this browser");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(settingsCommand).toBeFocused();
+
+  const cameraPixels = async () => {
+    await page.locator("#modules-command").focus();
+    await page.locator("#modules-command").hover();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    return createHash("sha256").update(await page.locator("#game-canvas").screenshot()).digest("hex");
+  };
+  const hold = async key => {
+    await page.keyboard.down(key);
+    try { await page.waitForTimeout(300); } finally { await page.keyboard.up(key); }
+  };
+  const cameraBefore = await cameraPixels();
+  await hold("w");
+  assert.equal(await cameraPixels(), cameraBefore, "Replaced W binding must not move the camera");
+  await hold("i");
+  assert.notEqual(await cameraPixels(), cameraBefore, "Remapped I binding must visibly move the camera");
+  await page.keyboard.press("Home");
+  assert.equal(await cameraPixels(), cameraBefore, "Historical Home must still restore the exact camera");
+  await page.locator("#mode-test").click();
+  await expect(page.locator("#test-pose-value")).toHaveText("Grounded");
+  await page.keyboard.press("Space");
+  await expect(page.locator("#test-pose-value")).toHaveText("Grounded");
+  await page.keyboard.press("p");
+  await expect(page.locator("#test-pose-value")).toHaveText("Floating at start");
+  await page.locator("#mode-select").click();
+  assert.equal(await exportZook(), changed);
+  recordCheck("Input settings: duplicate rejection, real remapped camera and Test keys, historical Home and unchanged Zook bytes");
+
+  await fileCommand("Save");
+  await expect(page.locator("#editor-announcement")).toHaveText("Zook saved to My Zooks");
+  await page.reload();
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await settingsCommand.click();
+  await expect(forward).toHaveValue("KeyI");
+  await expect(pose).toHaveValue("KeyP");
+  await settings.getByRole("button", { name: "Restore historical defaults", exact: true }).click();
+  await expect(forward).toHaveValue("KeyW");
+  await expect(pose).toHaveValue("Space");
+  await settings.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("saved in this browser");
+  const storedPreferences = await page.evaluate(() => localStorage.getItem("bamzooki.original-v31.input-bindings.v1"));
+  await pose.selectOption("KeyP");
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === "bamzooki.original-v31.input-bindings.v1") {
+        Storage.prototype.setItem = original;
+        throw new DOMException("Simulated preference storage exhaustion", "QuotaExceededError");
+      }
+      return Reflect.apply(original, this, [key, value]);
+    };
+  });
+  await settings.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("applied for this tab, but browser preference storage is unavailable");
+  assert.equal(await page.evaluate(() => localStorage.getItem("bamzooki.original-v31.input-bindings.v1")), storedPreferences);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await page.locator("#loader-open").click();
+  assert.equal(await exportZook(), changed);
+  await page.locator("#mode-test").click();
+  await page.keyboard.press("p");
+  await expect(page.locator("#test-pose-value")).toHaveText("Floating at start");
+  await page.locator("#mode-select").click();
+  await settingsCommand.click();
+  await settings.getByRole("button", { name: "Restore historical defaults", exact: true }).click();
+  await settings.getByRole("button", { name: "Save settings", exact: true }).click();
+  await expect(settings.getByRole("status")).toContainText("saved in this browser");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  recordCheck("Input settings: reload persistence, historical-default restore and honest tab-only recovery after a failed preference write");
+
+  // Disconnect only after the compiled app/profile has loaded. Any attempted
+  // HTTP request still fails this check, even if the game hides its failure.
+  const requests = [];
+  const captureRequest = request => { if (/^https?:/.test(request.url())) requests.push(request.url()); };
+  page.on("request", captureRequest);
+  await context.setOffline(true);
+  try {
+    await page.locator("#loader-command").click();
+    await page.getByRole("button", { name: "Website Zooks", exact: true }).click();
+    await expect(page.locator("#zook-loader")).toContainText("no network replacement is implied");
+    await page.locator("#loader-close").click();
+    await page.locator("#file-system-command").click();
+    const menu = page.getByRole("dialog", { name: "File / system", exact: true });
+    for (const [name, message] of [["Send to CBBC", "retired account and upload service"],
+      ["Website", "makes no request"], ["Online Update", "retired Windows updater"]]) {
+      await menu.getByRole("button", { name, exact: true }).click();
+      await expect(menu.getByRole("status")).toContainText(message);
+    }
+    await menu.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    const contextRecovery = async (canvasSelector, clockSelector, name) => {
+      const canvas = page.locator(canvasSelector);
+      const clock = page.locator(clockSelector);
+      const readClock = () => clockSelector === "#motion-timeline" ? clock.inputValue() : clock.innerText();
+      const initial = await readClock();
+      await expect.poll(readClock).not.toBe(initial);
+      // This is the real browser WebGL extension, not a fabricated DOM event
+      // or access to a game controller. Hold restoration until freeze is proved.
+      const handle = await canvas.evaluateHandle(element => {
+        const gl = element.getContext("webgl2");
+        const extension = gl?.getExtension("WEBGL_lose_context");
+        if (!extension) throw new Error("WebGL context-loss extension unavailable");
+        return { canvas: element, extension };
+      });
+      try {
+        await handle.evaluate(({ canvas, extension }) => new Promise(resolve => {
+          canvas.addEventListener("webglcontextlost", () => resolve(), { once: true });
+          extension.loseContext();
+        }));
+        await expect(canvas).toHaveAttribute("data-context-state", "lost");
+        await expect(page.locator("#build-status")).toContainText("paused while the graphics context recovers");
+        const frozen = await readClock();
+        await page.waitForTimeout(400);
+        assert.equal(await readClock(), frozen, `${name} displayed authoritative clock must freeze during context loss`);
+        await shot(`${name}-context-lost`);
+        assert.equal(await readClock(), frozen, `${name} must remain frozen throughout loss capture`);
+        await handle.evaluate(({ extension }) => extension.restoreContext());
+        await expect(canvas).toHaveAttribute("data-context-state", "ready");
+        await expect(page.locator("#build-status")).not.toContainText("graphics context");
+        await expect.poll(readClock).not.toBe(frozen);
+        await shot(`${name}-context-restored`);
+      } finally { await handle.dispose(); }
+    };
+
+    await page.locator("#mode-test").click();
+    await page.keyboard.press("Space");
+    await expect(page.locator("#test-pose-value")).toHaveText("Floating at start");
+    await page.keyboard.press("Space");
+    await expect(page.locator("#test-pose-value")).toHaveText("Grounded");
+    await page.locator("#test-timer-start").click();
+    await contextRecovery("#game-canvas", "#test-timer-value", "test");
+    await page.locator("#test-timer-stop").click();
+    await page.locator("#mode-select").click();
+    assert.equal(await exportZook(), changed);
+    recordCheck("Test: real WebGL loss freezes the live clock, restores rendering and preserves exact Zook bytes offline");
+
+    await module("simulator");
+    await page.locator("#simulator-contest-list button").filter({ hasText: "Dodgy Zook" }).click();
+    await page.locator("#simulator-zook-1").selectOption("tutorial");
+    await page.locator("#simulator-zook-2").selectOption("tutorial");
+    await page.locator("#simulator-start").click();
+    await expect.poll(async () => Number.parseFloat(await page.locator("#simulator-time").innerText()),
+      { timeout: 40_000 }).toBeGreaterThan(0.3);
+    await contextRecovery("#simulator-arena-canvas", "#simulator-time", "simulator");
+    await page.locator("#simulator-stop").click();
+    await expect(page.locator("#simulator-save-dialog")).toBeVisible();
+    await page.locator("#simulator-replay-name").fill("Browser recovery fixture");
+    await page.locator("#simulator-save").click();
+    await expect(page.locator("#simulator-save-dialog")).toBeHidden();
+    recordCheck("Simulator: real WebGL loss freezes live contest time, restores play and saves an ordinary recording offline");
+
+    await module("motion-player");
+    const replayOption = page.locator("#motion-replay-library option").filter({ hasText: "Browser recovery fixture" });
+    await expect(replayOption).toHaveCount(1);
+    await page.locator("#motion-replay-library").selectOption(await replayOption.getAttribute("value"));
+    await page.locator("#motion-load").click();
+    const replay = await exportReplay();
+    await page.locator("#motion-loop").check();
+    await page.locator("#motion-play").click();
+    await expect(page.locator("#motion-play")).toHaveText("Pause");
+    await contextRecovery("#motion-canvas", "#motion-timeline", "motion-player");
+    await page.locator("#motion-play").click();
+    await expect(page.locator("#motion-play")).toHaveText("Play");
+    assert.equal(await exportReplay(), replay);
+    await module("zook-kit");
+    assert.equal(await exportZook(), changed);
+    recordCheck("Motion Player: real WebGL loss freezes the playing timeline, restores playback and preserves exact replay and Zook bytes offline");
+    assert.deepEqual(requests, [], "Loaded core play and retired-service surfaces must not attempt HTTP requests");
+    recordCheck("Offline: retired services, Test, Simulator, replay Save/load/play/export and editor return make zero post-load HTTP requests");
+  } finally {
+    page.off("request", captureRequest);
+    await context.setOffline(false);
+  }
+};
+
 try {
   if (suite === "trial-focus") await trialFocusJourney();
   else if (suite === "storage") await storageJourney();
+  else if (suite === "browser-recovery") await browserRecoveryJourney();
   else {
     const library = await prepareLibraryJourney();
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 9 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);

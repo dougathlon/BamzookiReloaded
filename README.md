@@ -15,6 +15,10 @@ Use a desktop browser with WebGL2 and WebAssembly, at a window size of at least 
 
 The creatures move autonomously according to their construction and movement settings; this is not a keyboard-controlled racing game.
 
+**Input settings** is an optional modern accessibility addition. It can remap camera and Test keys without changing your Zook or the simulation. If preference storage fails, the dialog says that the new controls apply only to the current tab. Restore historical defaults to return to the original key assignments.
+
+After the app has loaded, building, testing, contests and replay storage work offline. A window smaller than 800 × 600 shows a compatibility message; enlarge it to resume editing. If the browser temporarily loses its graphics context, live play pauses until graphics recover. Export remains the independent backup for work held in browser storage.
+
 In **Select**, drag a side of the selected part's translucent box to reshape it. The matching Width, Height or Length slider previews the change; release to apply it as one Undo step, or press Escape to cancel. Mirrored partners change together. The fixed-center drag projection is Provisional; sliders and right-click numeric entry are also available.
 
 Use **File / system → Save** to store the current Zook locally. **Save As** creates a differently named copy without changing existing saves. The browser copy uses its new name in Passport; subsequent Save updates that copy. Export remains the way to keep a separate downloadable backup.
