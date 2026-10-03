@@ -98,17 +98,27 @@ const keyboardFocus = async (control) => {
 const keyboardActivate = async (control) => {
   // Programmatic locator focus after a pointer click does not establish the
   // same focus-visible modality as actual keyboard navigation in every engine.
+  await expect(control).toBeEnabled();
   if (await control.evaluate(element => element === document.activeElement && !element.matches(":focus-visible"))) {
     await page.keyboard.press("Shift+Tab");
   }
+  const trail = [];
   for (let index = 0; index < 120; index += 1) {
-    if (await control.evaluate(element => element === document.activeElement)) {
+    const state = await control.evaluate(element => {
+      const active = document.activeElement;
+      return { reached: element === active, active: active?.id || active?.tagName || "none",
+        reverse: active !== null && active !== document.body && Boolean(element.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING) };
+    });
+    if (state.reached) {
+      await keyboardFocus(control);
       await page.keyboard.press("Enter");
       return;
     }
-    await page.keyboard.press("Tab");
+    const key = state.reverse ? "Shift+Tab" : "Tab";
+    trail.push({ active: state.active, key });
+    await page.keyboard.press(key);
   }
-  throw new Error("Keyboard action is unreachable after 120 Tabs");
+  throw new Error(`Keyboard action is unreachable after 120 Tab steps: ${JSON.stringify(trail.slice(-20))}`);
 };
 const fileCommand = async (name) => {
   await page.locator("#file-system-command").click();
