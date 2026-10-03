@@ -1312,7 +1312,7 @@ const storageJourney = async () => {
     assert.deepEqual(await records(), beforeConflict, "A conflicting Save cannot write any store");
     recordCheck("Storage conflict: stale Save preserves exact unsaved bytes, dirty state and all three stores");
     await saveAs(peer, "Recovered conflict");
-    await width(peer, "1.0");
+    await width(peer, "1");
     await save(peer);
     const copy = await exportZook(peer);
     assert.equal(storedBytes(await records(), "Storage Zook"), newer);
