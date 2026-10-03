@@ -379,10 +379,11 @@ try {
     await expect.poll(async () => await page.locator("#simulator-save-dialog").isVisible() ||
       Number.parseFloat(await page.locator("#simulator-time").innerText()) >= 0.5, { timeout: 40_000 }).toBe(true);
     if (index === 5 || index === 6 || index === 8) await shot(`contest-${index}`);
-    if (index === 8) {
-      reportProgress("Hurdles: waiting for automatic contest completion");
+    if ([5, 6, 8].includes(index)) {
+      reportProgress(`${name}: waiting for automatic contest completion`);
       await expect(page.locator("#simulator-save-dialog")).toBeVisible({ timeout: 120_000 });
-      await shot("hurdles-automatic-end");
+      await expect(page.locator("#simulator-save-status")).toContainText("No winner is assigned");
+      await shot(`contest-${index}-automatic-end`);
     }
     if (await page.locator("#simulator-stop").isVisible()) {
       await page.locator("#simulator-stop").click({ timeout: 2000 }).catch(async (error) => {
@@ -427,6 +428,9 @@ try {
     assert.ok(replay.participants.every(({ zook }) => zook.parts.length === 9));
     const count = replay.arena.movingObjectIds.length + replay.arena.dynamicObjectIds.length;
     assert.equal(count, index === 3 ? 1 : index === 5 ? 58 : index === 8 ? 49 : 61);
+    if (index === 5 || index === 6) {
+      assert.equal(replay.arena.profileId, index === 5 ? "classic31-provisional-marbles-play-v3" : "classic31-provisional-smash-play-v3");
+    }
     if (index === 8) {
       assert.equal(replay.arena.profileId, "classic31-provisional-super-hurdles-play-v4");
       assert.ok(replay.arena.movingObjectIds.every((id) => /^hurdles-agent-\d+$/.test(id)));
@@ -434,11 +438,30 @@ try {
       assert.equal(cylinder25.translation.y, Math.fround(Math.fround(0.3 * 0.08) + Math.fround(-1.5 * 0.08)));
       const canvasHash = async () => {
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        return createHash("sha256").update(await page.locator("#motion-canvas").screenshot()).digest("hex");
+        const pixels = await page.locator("#motion-canvas").evaluate((canvas) => new Promise((resolve) => {
+          // Compare rendered pixels, not the compositor's rounded border and
+          // subpixel placement, which can move when the library gains entries.
+          requestAnimationFrame(async () => {
+            const gl = canvas.getContext("webgl2");
+            if (!gl) { resolve({ error: "Missing WebGL2 context" }); return; }
+            const bytes = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+            gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+            const colors = new Set();
+            for (let offset = 0; offset < bytes.length; offset += 16) colors.add(`${bytes[offset]},${bytes[offset + 1]},${bytes[offset + 2]}`);
+            const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+              .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+            resolve({ width: gl.drawingBufferWidth, height: gl.drawingBufferHeight, colors: colors.size, hash });
+          });
+        }));
+        assert.equal(pixels.error, undefined);
+        assert.ok(pixels.colors > 50, "Replay comparison requires a rendered scene, not a cleared buffer");
+        return `${pixels.width}x${pixels.height}:${pixels.hash}`;
       };
       await page.locator("#motion-loop").uncheck();
       await page.locator("#motion-timeline").press("Home");
       await page.locator('button[data-motion-camera="camera-3"]').click();
+      await expect(page.locator("#motion-timeline")).toHaveValue("0");
+      await shot("hurdles-current-profile-start");
       const currentPixels = await canvasHash();
       let legacyPixels;
       for (const version of [1, 2, 3, 4]) {
@@ -452,11 +475,16 @@ try {
         await expect(page.locator("#motion-replay-title")).toHaveText(version === 4 ? title : `Synthetic Hurdles browser profile v${version}`);
         await page.locator("#motion-timeline").press("Home");
         await page.locator('button[data-motion-camera="camera-3"]').click();
+        await expect(page.locator("#motion-timeline")).toHaveValue("0");
+        reportProgress(`Hurdles profile v${version}: rendered geometry comparison`);
         if (version === 1) {
           await expect.poll(canvasHash).not.toBe(currentPixels);
           legacyPixels = await canvasHash();
           await shot("hurdles-legacy-replay");
-        } else await expect.poll(canvasHash).toBe(version === 2 ? legacyPixels : currentPixels);
+        } else {
+          if (version === 3) await shot("hurdles-prior-profile-start");
+          await expect.poll(canvasHash).toBe(version === 2 ? legacyPixels : currentPixels);
+        }
       }
       assert.equal(replay.outcome, null);
       assert.ok(replay.keyframes.every((frame) => frame.participants.every(({ snapshot }) =>
