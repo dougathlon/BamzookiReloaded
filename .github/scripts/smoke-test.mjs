@@ -74,6 +74,9 @@ const shot = async (name) => {
 const module = async (name) => {
   await page.locator("#modules-command").click();
   await page.locator(`#module-launcher [data-suite-module="${name}"]`).click();
+  // Module activation closes the chooser only after its asynchronous library
+  // refresh. The shell label alone can precede validated replay availability.
+  await page.locator("#module-launcher").waitFor({ state: "hidden" });
   await expect(page.locator(".shell")).toHaveAttribute("data-module", name);
 };
 const accessibility = async (name) => {
