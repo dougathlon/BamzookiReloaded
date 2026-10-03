@@ -125,6 +125,83 @@ const keyboardActivate = async (control) => {
   }
   throw new Error(`Keyboard action is unreachable after 120 Tab steps: ${JSON.stringify(trail.slice(-20))}`);
 };
+
+const attachmentFocusPreflight = async () => {
+  // Isolate native pointer -> reverse-Tab behavior before the long replay route.
+  // These disposable pages never save a creature or access the player's data.
+  const probe = await context.newPage();
+  probe.setDefaultTimeout(20_000);
+  const observations = [];
+  const instrument = async () => probe.evaluate(() => {
+    const events = [];
+    window.addEventListener("keydown", event => {
+      events.push({ key: event.key, code: event.code, shift: event.shiftKey,
+        prevented: event.defaultPrevented, trusted: event.isTrusted,
+        target: event.target.id || event.target.tagName });
+      if (events.length > 16) events.shift();
+    });
+    window.focusProbeEvents = events;
+  });
+  const observe = async label => observations.push({ label, ...await probe.evaluate(() => {
+    const selection = getSelection();
+    const nodeLabel = node => node?.nodeType === Node.TEXT_NODE
+      ? `text:${node.parentElement?.id || node.parentElement?.tagName}`
+      : node?.id || node?.nodeName || null;
+    return { active: document.activeElement?.id, focused: document.hasFocus(),
+      selection: { anchor: nodeLabel(selection?.anchorNode), offset: selection?.anchorOffset,
+        focus: nodeLabel(selection?.focusNode), collapsed: selection?.isCollapsed },
+      events: [...window.focusProbeEvents] };
+  }) });
+  try {
+    for (const variant of ["native", "prevent-shift", "unselectable"]) {
+      await probe.setContent('<input id="previous" type="number"><button id="apply">Apply position and facing</button><button id="next">Next</button>');
+      await probe.evaluate(variant => {
+        const button = document.querySelector("#apply");
+        button.addEventListener("click", () => {
+          button.disabled = true;
+          requestAnimationFrame(() => { button.disabled = false; button.focus(); });
+        });
+        if (variant === "prevent-shift") window.addEventListener("keydown", event => {
+          if (event.code === "ShiftLeft") event.preventDefault();
+        }, { once: true });
+        if (variant === "unselectable") button.style.setProperty("-webkit-user-select", "none");
+      }, variant);
+      await instrument();
+      await probe.locator("#previous").fill("-25");
+      await probe.locator("#apply").click();
+      await expect(probe.locator("#apply")).toBeEnabled({ timeout: 20_000 });
+      await observe(`${variant}: pointer Apply`);
+      await probe.keyboard.press("Shift+Tab");
+      await observe(`${variant}: reverse Tab`);
+    }
+    await probe.goto(`${origin}${prefix}`);
+    await expect(probe.locator("#app")).toHaveAttribute("aria-busy", "false");
+    await probe.locator("#loader-open").click();
+    await expect(probe.locator("#zook-loader")).toBeHidden();
+    await probe.locator("#mode-add").click();
+    await probe.getByRole("button", { name: "Left", exact: true }).click();
+    await expect(probe.locator("#part-summary")).toHaveText("2 parts");
+    await instrument();
+    await probe.locator("#attachment-facing-roll").fill("-24");
+    await probe.keyboard.press("Tab");
+    await expect(probe.locator("#attachment-apply")).toBeFocused();
+    await probe.keyboard.press("Enter");
+    await expect(probe.locator("#attachment-apply")).toBeEnabled({ timeout: 20_000 });
+    await expect(probe.locator("#attachment-apply")).toBeFocused();
+    await probe.locator("#attachment-facing-roll").fill("-25");
+    await probe.locator("#attachment-apply").click();
+    await expect(probe.locator("#attachment-apply")).toBeEnabled({ timeout: 20_000 });
+    await observe("game: pointer Apply");
+    await probe.keyboard.press("Shift+Tab");
+    await observe("game: reverse Tab");
+    await expect(probe.locator("#attachment-facing-roll")).toBeFocused();
+    recordCheck("Attachment preflight: keyboard Apply retains focus and pointer Apply permits native reverse Tab to Roll");
+  } finally {
+    await writeFile(path.join(output, `${engine}-attachment-focus.json`), `${JSON.stringify(observations, null, 2)}\n`);
+    await probe.screenshot({ path: path.join(output, `${engine}-attachment-focus.png`) }).catch(() => {});
+    await probe.close();
+  }
+};
 const fileCommand = async (name) => {
   await page.locator("#file-system-command").click();
   await page.getByRole("dialog", { name: "File / system" }).getByRole("button", { name, exact: true }).click();
@@ -383,6 +460,7 @@ const startBoundsDrag = async (model, partId, axis, increase = 0.5) => {
 };
 
 try {
+  await attachmentFocusPreflight();
   await page.goto(`${origin}${prefix}`);
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#capability-error")).toBeHidden();
