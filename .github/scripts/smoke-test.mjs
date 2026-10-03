@@ -134,6 +134,10 @@ try {
   await expect(page.locator('#loader-list [aria-selected="true"]')).toContainText("Leapsa");
   await accessibility("Loader result sorting");
   await shot("loader-results");
+  await page.locator("#loader-tab-achievement").click();
+  await expect(page.locator("#loader-preview dt")).toHaveText(["Sprint", "Block-Push", "Hurdles", "High jump", "Lap"]);
+  await expect(page.locator("#loader-preview")).toContainText("Confirmed shipped example table");
+  checks.push("Examples: confirmed source-table boundary and exact five-trial order/spelling");
   await page.locator("#loader-sort").selectOption("original");
   checks.push("Loader: all five historical result orders, retained selection and sorted keyboard navigation");
   await page.locator("#loader-tutorial").click();
@@ -460,9 +464,9 @@ try {
 
   const result = (trialKey, value, unit = "cm/sec", resultClass = "provisional-play") => ({ trialKey, value, unit, resultClass });
   const fixtures = [
-    sortingFixture(named, "Sort Alpha", [result("classic31.trial.sprint", 30, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v1.sprint", 100), result("classic31.provisional-play.v2.sprint", 5), result("classic31.provisional-play.v2.lap", 50, "sec")]),
+    sortingFixture({ ...named, metadata: { ...named.metadata, createdAt: "classic31:shipped-example", lineage: ["classic31.example.ant"] } }, "Sort Alpha", [result("classic31.trial.sprint", 30, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v1.sprint", 100), result("classic31.provisional-play.v2.sprint", 5), result("classic31.provisional-play.v2.lap", 50, "sec")]),
     sortingFixture(named, "Sort Beta", [result("classic31.trial.sprint", 10, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v2.sprint", 20), result("classic31.provisional-play.v2.lap", 30, "sec")]),
-    sortingFixture(named, "Sort Gamma", [result("classic31.trial.sprint", 40, "m/sec", "historical-metadata"), result("classic31.provisional-play.v1.sprint", 120), result("classic31.provisional-play.v2.sprint", 500, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v3.sprint", 999)]),
+    sortingFixture(named, "Sort Gamma", [result("classic31.trial.sprint", 40, "m/sec", "historical-metadata"), result("classic31.trial.block-push", 99, "cm"), result("classic31.trial.high-jump", -1, "cm", "historical-metadata"), result("classic31.provisional-play.v1.sprint", 120), result("classic31.provisional-play.v2.sprint", 500, "cm/sec", "historical-metadata"), result("classic31.provisional-play.v3.sprint", 999)]),
   ];
   for (const fixture of fixtures) {
     await page.locator("#loader-command").click();
@@ -540,7 +544,7 @@ try {
   await page.getByRole("button", { name: "My Zooks", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.sortingReadGate.blocked)).toBe(true);
   await page.locator("#loader-list [role=option]").filter({ hasText: "Sort Gamma" }).click();
-  await expect(page.locator("#loader-preview")).toContainText("3 retained record(s)");
+  await expect(page.locator("#loader-preview")).toContainText("5 retained record(s)");
   await expect(page.locator("#loader-list")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#loader-open")).toBeDisabled();
   await page.evaluate(() => { window.sortingReadGate.release(); delete window.sortingReadGate; });
@@ -549,6 +553,51 @@ try {
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), savedFixtureBytes);
   checks.push("My Zooks: saved/reloaded score sets, stable selection and refresh, source reset, wrong-unit/class/version exclusion, forged-index rejection, held-validation Open guard and unchanged canonical bytes");
+
+  await page.locator("#passport-command").click();
+  await page.locator("#passport-tab-achievement").click();
+  const achievementRow = (name) => page.locator(".passport-achievements li").filter({ has: page.getByText(name, { exact: true }) });
+  await expect(achievementRow("Sprint")).toContainText("unit m/sec conflicts with evidenced cm/sec");
+  await expect(achievementRow("Sprint")).toContainText("Namespaced Provisional record has conflicting metadata");
+  await expect(achievementRow("Block-Push")).toContainText("declared class conflicts");
+  await expect(achievementRow("High jump")).toContainText("invalid value");
+  await expect(page.locator("#passport-panel")).toContainText("classic31.provisional-play.v3.sprint");
+  await expect(page.locator("#passport-panel")).not.toContainText("Confirmed shipped metadata");
+  await shot("passport-conflicting-records");
+  await page.locator("#passport-close").click();
+  assert.equal(await exportZook(), savedFixtureBytes);
+  checks.push("Passport: wrong-unit/class/negative records remain uninterpreted; future records and canonical bytes preserved");
+
+  await page.locator("#loader-command").click();
+  await page.locator("#loader-list [role=option]").filter({ hasText: "Sort Alpha" }).click();
+  await expect(page.locator("#loader-list")).toHaveAttribute("aria-busy", "false");
+  await page.locator("#loader-open").click();
+  await expect(page.locator("#zook-loader")).toBeHidden();
+  const declaredBytes = await exportZook();
+  assert.equal(declaredBytes, fixtures[0]);
+  await page.locator("#passport-command").click();
+  await page.locator("#passport-tab-general").click();
+  await expect(page.getByRole("textbox", { name: "Creation record" })).toHaveValue("Original-example stand-in (declared)");
+  await expect(page.locator("#passport-panel")).toContainText("Imports do not verify authorship");
+  await accessibility("Passport declared identity");
+  await page.locator("#passport-tab-history").click();
+  await expect(page.locator("#passport-panel")).toContainText("Original-example stand-in (declared)");
+  await expect(page.locator("#passport-panel")).toContainText("classic31.example.ant");
+  await expect(page.locator("#passport-panel")).toContainText("document-supplied");
+  await accessibility("Passport declared lineage");
+  await page.locator("#passport-tab-achievement").click();
+  await expect(achievementRow("Sprint")).toContainText("30.0 cm/sec — declared historical metadata; not independently verified");
+  await expect(achievementRow("Sprint")).toContainText("5.0 cm/sec — Provisional Play best");
+  await expect(achievementRow("Sprint")).toContainText("100.0 cm/sec — preserved legacy Provisional v1");
+  await expect(page.locator("#passport-panel")).not.toContainText("Confirmed shipped metadata");
+  await page.locator("#passport-tab-achievement").press("Tab");
+  await expect(page.locator("#passport-panel")).toBeFocused();
+  await accessibility("Passport declared achievements");
+  await shot("passport-declared-records");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#passport-command")).toBeFocused();
+  assert.equal(await exportZook(), declaredBytes);
+  checks.push("Passport: declared creation/lineage and separated result versions are never authenticated; canonical exports unchanged");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {

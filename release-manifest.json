@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 33343,
-      "sha256": "d99b9ae3516ad234458948ca0e113e3bf1c50e785c2d0566ebee13ab4b54f570"
+      "bytes": 37247,
+      "sha256": "d7d6a1577c46ad4a1f7ad4b830e2abeb63199e20c87e029903d9c198a69f378a"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
@@ -32,14 +32,14 @@
       "sha256": "e821502c32ceb5993cf8f2411fad2782dbcd43f8ebe93c9ed67b8621d070599b"
     },
     {
-      "path": "site/assets/index-BXonQWmV.js",
-      "bytes": 3837220,
-      "sha256": "31015b2619d2bcf2bd04e88fd748a1d79f79eb00bfaee81cf4c87ab8613644d4"
+      "path": "site/assets/index-Cha83Tf1.js",
+      "bytes": 3837883,
+      "sha256": "e9b4c89eb1a9221b5b67d098316edcccdbe8de76cb15ff12d6e435764ff2fa35"
     },
     {
       "path": "site/index.html",
       "bytes": 51406,
-      "sha256": "1d7206bf5a49b0b0ebe3db73c8bcb8772c900b3dc1f56f47b33f5fe29c59ca84"
+      "sha256": "32422061c7a568577596a469d43e66bb4af5ca08ed12703a9d62d68b0dddf82a"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",
