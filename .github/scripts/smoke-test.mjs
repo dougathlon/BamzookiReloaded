@@ -86,6 +86,14 @@ const accessibility = async (name) => {
   assert.deepEqual(violations, [], `${name} accessibility checks`);
   recordCheck(`${name}: automated accessibility`);
 };
+const keyboardFocus = async (control) => {
+  await expect(control).toBeFocused();
+  const visible = await control.evaluate(element => {
+    const style = getComputedStyle(element);
+    return element.matches(":focus-visible") && style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2;
+  });
+  assert.equal(visible, true, "Keyboard focus must have a visible outline");
+};
 const fileCommand = async (name) => {
   await page.locator("#file-system-command").click();
   await page.getByRole("dialog", { name: "File / system" }).getByRole("button", { name, exact: true }).click();
@@ -565,7 +573,9 @@ try {
 
   await module("motion-player");
   await page.locator("#motion-refresh").press("Enter");
-  await expect(page.locator("#motion-refresh")).toBeEnabled();
+  // Refresh revalidates full recordings. Use the ordinary action budget, not
+  // the matcher's shorter default; hardware timing is a separate gate.
+  await expect(page.locator("#motion-refresh")).toBeEnabled({ timeout: 20_000 });
   await expect(page.locator("#motion-refresh")).toBeFocused();
   recordCheck("Motion Player: asynchronous Refresh returns operation-owned keyboard focus");
   for (const { title, index } of saved) {
@@ -961,18 +971,19 @@ try {
   recordCheck("Bounds reshape: Escape, external focus, actual capture loss and resize cancel without changing canonical bytes");
   await page.locator("#mode-add").click();
   await page.getByRole("button", { name: "Left", exact: true }).press("Enter");
-  await expect(page.locator("#part-select")).toBeFocused();
+  await keyboardFocus(page.locator("#part-select"));
   await page.locator("#mode-add").click();
   await page.locator("#placement-parent").selectOption("p0002");
   await page.getByRole("button", { name: "Below", exact: true }).press("Enter");
-  await expect(page.locator("#part-select")).toBeFocused();
+  await keyboardFocus(page.locator("#part-select"));
   await shot("keyboard-placement-focus");
   await page.locator("#part-select").selectOption("p0002");
   await page.locator("#attachment-facing-roll").fill("-25");
   await page.locator("#attachment-apply").click();
   await expect(page.locator("#editor-announcement")).toHaveText("Adjust position and facing complete");
-  await page.locator("#mirror-command").click();
+  await page.locator("#mirror-command").press("Enter");
   await expect(page.locator("#part-summary")).toHaveText("5 parts");
+  await keyboardFocus(page.locator("#part-select"));
   await page.locator("#part-select").selectOption("p0003");
   const nestedBefore = await exportZook(), nestedModel = JSON.parse(nestedBefore);
   await startBoundsDrag(nestedModel, "p0003", 2, 0.4);
@@ -994,6 +1005,20 @@ try {
   assert.equal(await exportZook(), nestedAfter);
   await accessibility("Bounds reshape editor");
   recordCheck("Bounds reshape: rotated nested mirror partners, unchanged transforms/paths and exact Undo/Redo");
+  await page.locator("#copy-command").press("Enter");
+  await keyboardFocus(page.locator("#placement-parent"));
+  await expect(page.locator("#mode-add")).toHaveAttribute("aria-pressed", "true");
+  await shot("keyboard-copy-focus");
+  await page.locator("#mode-select").press("Enter");
+  assert.equal(await exportZook(), nestedAfter, "Cancelling Copy must preserve the exact construction");
+  await page.locator("#delete-command").press("Enter");
+  await expect(page.locator("#editor-announcement")).toHaveText("Selected branch deleted");
+  await keyboardFocus(page.locator("#part-select"));
+  const deleted = JSON.parse(await exportZook());
+  assert.ok(deleted.parts.length < reshaped.parts.length, "Delete must remove the selected branch");
+  await page.locator("#undo-command").press("Enter");
+  assert.equal(await exportZook(), nestedAfter, "Undo must restore exact branch bytes after Delete");
+  recordCheck("Branch actions: visible keyboard focus after Mirror, Copy and Delete; cancelled Copy and undone Delete preserve exact bytes");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {
