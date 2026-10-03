@@ -457,13 +457,29 @@ try {
   await expect(page.locator("#loader-sort optgroup")).toHaveCount(1);
   await page.getByRole("button", { name: "Website Zooks", exact: true }).click();
   await expect(page.locator("#loader-sort")).toBeDisabled();
+  await page.evaluate(() => {
+    const nativeDigest = SubtleCrypto.prototype.digest;
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    window.sortingReadGate = { release, blocked: false };
+    SubtleCrypto.prototype.digest = function (...args) {
+      SubtleCrypto.prototype.digest = nativeDigest;
+      window.sortingReadGate.blocked = true;
+      return Promise.all([Reflect.apply(nativeDigest, this, args), held]).then(([digest]) => digest);
+    };
+  });
   await page.getByRole("button", { name: "My Zooks", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.sortingReadGate.blocked)).toBe(true);
   await page.locator("#loader-list [role=option]").filter({ hasText: "Sort Gamma" }).click();
   await expect(page.locator("#loader-preview")).toContainText("3 retained record(s)");
+  await expect(page.locator("#loader-list")).toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#loader-open")).toBeDisabled();
+  await page.evaluate(() => { window.sortingReadGate.release(); delete window.sortingReadGate; });
+  await expect(page.locator("#loader-list")).toHaveAttribute("aria-busy", "false");
   await page.locator("#loader-open").click();
   await expect(page.locator("#zook-loader")).toBeHidden();
   assert.equal(await exportZook(), savedFixtureBytes);
-  checks.push("My Zooks: saved/reloaded score sets, stable selection and refresh, source reset, wrong-unit/class/version exclusion, forged-index rejection and unchanged canonical bytes");
+  checks.push("My Zooks: saved/reloaded score sets, stable selection and refresh, source reset, wrong-unit/class/version exclusion, forged-index rejection, held-validation Open guard and unchanged canonical bytes");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {
