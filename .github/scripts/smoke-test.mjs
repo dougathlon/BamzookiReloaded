@@ -470,7 +470,7 @@ try {
       await shot(`contest-${index}-automatic-end`);
     }
     if (await page.locator("#simulator-stop").isVisible()) {
-      await page.locator("#simulator-stop").click({ timeout: 2000 }).catch(async (error) => {
+      await page.locator("#simulator-stop").click().catch(async (error) => {
         if (!await page.locator("#simulator-save-dialog").isVisible()) throw error;
       });
     }
