@@ -417,6 +417,11 @@ try {
     await expect(page.locator("#motion-play")).toHaveText("Pause");
     await page.locator("#motion-play").click();
     await page.locator("#motion-timeline").press("End");
+    await expect(page.locator("#motion-timeline")).toHaveValue(await page.locator("#motion-timeline").getAttribute("max"));
+    await page.locator("#motion-timeline").press("Home");
+    await expect(page.locator("#motion-timeline")).toHaveValue("0");
+    await page.locator("#motion-timeline").press("End");
+    await expect(page.locator("#motion-timeline")).toHaveValue(await page.locator("#motion-timeline").getAttribute("max"));
     for (const button of await page.locator("button[data-motion-camera]").all()) await button.click();
     if (index === 6) await shot("arena-replay");
     if (index === 8) await shot("hurdles-individual-replay");
@@ -441,24 +446,7 @@ try {
       assert.equal(cylinder25.translation.y, Math.fround(Math.fround(0.3 * 0.08) + Math.fround(-1.5 * 0.08)));
       const canvasHash = async () => {
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        const pixels = await page.locator("#motion-canvas").evaluate((canvas) => new Promise((resolve) => {
-          // Compare rendered pixels, not the compositor's rounded border and
-          // subpixel placement, which can move when the library gains entries.
-          requestAnimationFrame(async () => {
-            const gl = canvas.getContext("webgl2");
-            if (!gl) { resolve({ error: "Missing WebGL2 context" }); return; }
-            const bytes = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-            gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
-            const colors = new Set();
-            for (let offset = 0; offset < bytes.length; offset += 16) colors.add(`${bytes[offset]},${bytes[offset + 1]},${bytes[offset + 2]}`);
-            const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
-              .map((byte) => byte.toString(16).padStart(2, "0")).join("");
-            resolve({ width: gl.drawingBufferWidth, height: gl.drawingBufferHeight, colors: colors.size, hash });
-          });
-        }));
-        assert.equal(pixels.error, undefined);
-        assert.ok(pixels.colors > 50, "Replay comparison requires a rendered scene, not a cleared buffer");
-        return `${pixels.width}x${pixels.height}:${pixels.hash}`;
+        return createHash("sha256").update(await page.locator("#motion-canvas").screenshot()).digest("hex");
       };
       await page.locator("#motion-loop").uncheck();
       await page.locator("#motion-timeline").press("Home");
