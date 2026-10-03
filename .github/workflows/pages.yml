@@ -15,11 +15,12 @@ concurrency:
 jobs:
   browser-check:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.browser == 'chromium' && 25 || 15 }}
+    timeout-minutes: ${{ matrix.suite == 'trial-focus' && 8 || matrix.browser == 'chromium' && 25 || 15 }}
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
+        suite: [journey, trial-focus]
     steps:
       - name: Check out static distribution
         uses: actions/checkout@v7
@@ -38,6 +39,7 @@ jobs:
         env:
           BROWSER_TEST_RUNTIME: ${{ runner.temp }}/browser-check
           BROWSER_TEST_ENGINE: ${{ matrix.browser }}
+          BROWSER_TEST_SUITE: ${{ matrix.suite }}
           BROWSER_TEST_OUTPUT: ${{ runner.temp }}/browser-results
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: xvfb-run --auto-servernum node .github/scripts/smoke-test.mjs
@@ -46,7 +48,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: browser-check-${{ matrix.browser }}
+          name: browser-check-${{ matrix.browser }}-${{ matrix.suite }}
           path: ${{ runner.temp }}/browser-results
           retention-days: 7
 

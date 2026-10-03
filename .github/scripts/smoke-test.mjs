@@ -12,6 +12,8 @@ const { expect } = require("playwright/test");
 const { default: AxeBuilder } = require("@axe-core/playwright");
 const engine = process.env.BROWSER_TEST_ENGINE ?? "chromium";
 assert.ok(["chromium", "firefox", "webkit"].includes(engine), "Unsupported browser test engine");
+const suite = process.env.BROWSER_TEST_SUITE ?? "journey";
+assert.ok(["journey", "trial-focus"].includes(suite), "Unsupported browser test suite");
 const output = path.resolve(process.env.BROWSER_TEST_OUTPUT ?? "browser-results");
 const site = await realpath("site");
 const prefix = "/BamzookiReloaded/";
@@ -95,7 +97,7 @@ const keyboardFocus = async (control) => {
   assert.ok(focus.visible && focus.outlineStyle !== "none" && parseFloat(focus.outlineWidth) >= 2,
     `Keyboard focus must have a visible outline: ${JSON.stringify(focus)}`);
 };
-const keyboardActivate = async (control) => {
+const keyboardNavigate = async (control) => {
   // Programmatic locator focus after a pointer click does not establish the
   // same focus-visible modality as actual keyboard navigation in every engine.
   await expect(control).toBeEnabled();
@@ -113,7 +115,6 @@ const keyboardActivate = async (control) => {
     });
     if (state.reached) {
       await keyboardFocus(control);
-      await page.keyboard.press("Enter");
       return;
     }
     const key = state.reverse ? "Shift+Tab" : "Tab";
@@ -124,6 +125,58 @@ const keyboardActivate = async (control) => {
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
   }
   throw new Error(`Keyboard action is unreachable after 120 Tab steps: ${JSON.stringify(trail.slice(-20))}`);
+};
+const keyboardActivate = async (control) => {
+  await keyboardNavigate(control);
+  await page.keyboard.press("Enter");
+};
+
+const trialFocusJourney = async () => {
+  await page.goto(`${origin}${prefix}`);
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.locator("#loader-tutorial").click();
+  await expect(page.locator("#part-summary")).toHaveText("9 parts");
+  await page.locator("#mode-test").click();
+  await page.locator("#test-trial").selectOption("classic31.trial.block-push");
+  const run = page.locator("#provisional-trial-run");
+  const stop = page.locator("#provisional-trial-stop");
+  const reset = page.locator("#provisional-trial-reset");
+  const retain = page.locator("#provisional-trial-retain");
+  const status = page.locator("#provisional-trial-status");
+  await keyboardActivate(run);
+  await expect(status).toContainText("Running Block-Push");
+  await keyboardFocus(stop);
+  await page.keyboard.press("Enter");
+  await expect(status).toContainText("no retainable result");
+  await keyboardFocus(run);
+  await keyboardActivate(reset);
+  await expect(status).toContainText("reset and ready");
+  await keyboardFocus(reset);
+  recordCheck("Trial focus: keyboard Run, Stop and Reset hand off to an enabled, visibly focused control");
+
+  await keyboardActivate(run);
+  await keyboardFocus(stop);
+  // This is an ordinary twenty-second fixed-tick trial, not a diagnostics jump.
+  // Keep the existing full-contest completion ceiling on software rendering.
+  await expect(status).toContainText("Result ready:", { timeout: 120_000 });
+  await keyboardFocus(retain);
+  await shot("trial-result-focus");
+  await page.keyboard.press("Enter");
+  await expect(status).toContainText("Retained:");
+  await expect(retain).toBeDisabled();
+  await keyboardFocus(run);
+  recordCheck("Trial focus: ordinary automatic completion focuses Retain and retaining returns focus to Run");
+
+  await keyboardActivate(run);
+  await expect(status).toContainText("Running Block-Push");
+  await keyboardFocus(stop);
+  await keyboardNavigate(page.locator("#camera-follow"));
+  await expect(status).toContainText("Retained:", { timeout: 120_000 });
+  await expect(stop).toBeDisabled();
+  await keyboardFocus(page.locator("#camera-follow"));
+  await shot("trial-nonstealing-focus");
+  recordCheck("Trial focus: repeated automatic completion leaves a different keyboard-owned control focused");
+  // Retained results belong only to this unsaved CI document; never press Save.
 };
 
 const attachmentFocusPreflight = async () => {
@@ -466,7 +519,7 @@ const startBoundsDrag = async (model, partId, axis, increase = 0.5) => {
   await expect.poll(async () => Math.abs(Number(await input.inputValue()) - part.shape[dimensions[axis]] - increase)).toBeLessThan(0.03);
 };
 
-try {
+const playJourney = async () => {
   await attachmentFocusPreflight();
   await page.goto(`${origin}${prefix}`);
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
@@ -1158,14 +1211,19 @@ try {
   await shot("keyboard-path-focus");
   assert.deepEqual(JSON.parse(await exportZook()).parts.map(({ id, motion }) => ({ id, motion })), motionAfterApply);
   recordCheck("Motion path: visible keyboard focus after coordinate apply, insertion and minimum-size removal; exact paths restored");
+};
+
+try {
+  if (suite === "trial-focus") await trialFocusJourney();
+  else await playJourney();
   assert.deepEqual(errors, [], "Browser console, script, network errors");
-  console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
+  console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {
   failures.push(error.message);
   await shot("failure").catch(() => {});
   throw error;
 } finally {
-  await writeFile(path.join(output, `${engine}-summary.json`), `${JSON.stringify({ engine, graphics: "software-rendered CI; not hardware performance or real Safari evidence", checks, failures, errors }, null, 2)}\n`);
+  await writeFile(path.join(output, `${engine}-summary.json`), `${JSON.stringify({ engine, suite, graphics: "software-rendered CI; not hardware performance or real Safari evidence", checks, failures, errors }, null, 2)}\n`);
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
 }
