@@ -27,19 +27,19 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
-      "path": "site/assets/index-B3hd4H2m.js",
-      "bytes": 3863702,
-      "sha256": "0733e466c972ef6833ea9e0c2b9978cd23817ec6239bd593ddcc8408dca1ed42"
-    },
-    {
       "path": "site/assets/index-Cmbyuj8d.css",
       "bytes": 31988,
       "sha256": "ce5e961c7a30683c17b3798633507befc0a794c85852c1f8c6dd52eed47b4d60"
     },
     {
+      "path": "site/assets/index-DUKcLIQ1.js",
+      "bytes": 3868623,
+      "sha256": "4efe1ef537a33b245cfffabee59c3d6770f309eb98d6f8bf35005fe3b47cb60a"
+    },
+    {
       "path": "site/index.html",
       "bytes": 52833,
-      "sha256": "669f00411e7a98d0b383fe3e8d97e9a7855402563ec1a25b9f23c4c6fcb69934"
+      "sha256": "3905436f678d5f2de296d2dbd07c015c1578bf4d5bfeb55a097b1a7fdf2cebfd"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",
