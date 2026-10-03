@@ -15,6 +15,8 @@ Use a desktop browser with WebGL2 and WebAssembly, at a window size of at least 
 
 The creatures move autonomously according to their construction and movement settings; this is not a keyboard-controlled racing game.
 
+In **Select**, drag a side of the selected part's translucent box to reshape it. The matching Width, Height or Length slider previews the change; release to apply it as one Undo step, or press Escape to cancel. Mirrored partners change together. The fixed-center drag projection is Provisional; sliders and right-click numeric entry are also available.
+
 Use **File / system → Save** to store the current Zook locally. **Save As** creates a differently named copy without changing existing saves. The browser copy uses its new name in Passport; subsequent Save updates that copy. Export remains the way to keep a separate downloadable backup.
 
 **New Zook** asks for a name before creating its root body. When New or Open would replace modified work, choose **Save**, **Don't Save**, or **Cancel**. A failed save or import keeps the current Zook open. Cancelling the New name prompt also keeps it open, including after choosing Save.

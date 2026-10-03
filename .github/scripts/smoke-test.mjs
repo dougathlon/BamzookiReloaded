@@ -106,6 +106,45 @@ const sortingFixture = (base, name, passportResults) => {
   return JSON.stringify(ordered({ ...document, checksum: createHash("sha256").update(JSON.stringify(ordered(document))).digest("hex") }));
 };
 
+const dot = (a, b) => a.reduce((sum, value, index) => sum + value * b[index], 0);
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const normalize = (v) => v.map(value => value / Math.hypot(...v));
+const projectEditorPoint = (box, point) => {
+  const eye = [5.4, 3.6, 6.6], target = [0, 0.65, 0];
+  const back = normalize(eye.map((value, index) => value - target[index]));
+  const right = normalize(cross([0, 1, 0], back)), up = cross(back, right);
+  const relative = point.map((value, index) => value - eye[index]);
+  const depth = -dot(relative, back), tangent = Math.tan(17 * Math.PI / 180);
+  assert.ok(depth > 0);
+  return { x: box.x + box.width / 2 + dot(relative, right) * box.height / (2 * depth * tangent),
+    y: box.y + box.height / 2 - dot(relative, up) * box.height / (2 * depth * tangent) };
+};
+const partWorldPoint = (document, id, local) => {
+  let point = [...local];
+  for (let part = document.parts.find(p => p.id === id); part; part = document.parts.find(p => p.id === part.parentId)) {
+    const { translation: t, rotation: q, scale: s } = part.localTransform;
+    const v = point.map((value, index) => value * [s.x, s.y, s.z][index]);
+    const first = cross([q.x, q.y, q.z], v), second = cross([q.x, q.y, q.z], first);
+    point = v.map((value, index) => value + 2 * q.w * first[index] + 2 * second[index] + [t.x, t.y, t.z][index]);
+  }
+  return point;
+};
+const startBoundsDrag = async (model, partId, axis, increase = 0.5) => {
+  const dimensions = ["widthMeters", "heightMeters", "lengthMeters"];
+  const part = model.parts.find(p => p.id === partId);
+  const start = [0, 0, 0]; start[axis] = part.selection.halfExtentsMeters[["x", "y", "z"][axis]] * 1.04;
+  const end = [...start]; end[axis] += increase * 1.04 / 2;
+  const box = await page.locator("#game-canvas").boundingBox();
+  const from = projectEditorPoint(box, partWorldPoint(model, partId, start));
+  const to = projectEditorPoint(box, partWorldPoint(model, partId, end));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await expect(page.locator("#build-status")).toContainText(`Reshaping ${["Width", "Height", "Length"][axis]}`);
+  await page.mouse.move(to.x, to.y, { steps: 3 });
+  const input = page.locator(`#shape-${["width", "height", "length"][axis]}`);
+  await expect.poll(async () => Math.abs(Number(await input.inputValue()) - part.shape[dimensions[axis]] - increase)).toBeLessThan(0.03);
+};
+
 try {
   await page.goto(`${origin}${prefix}`);
   await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
@@ -598,6 +637,81 @@ try {
   await expect(page.locator("#passport-command")).toBeFocused();
   assert.equal(await exportZook(), declaredBytes);
   checks.push("Passport: declared creation/lineage and separated result versions are never authenticated; canonical exports unchanged");
+
+  await page.reload();
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.locator("#loader-close").click();
+  const rootBefore = await exportZook();
+  const rootModel = JSON.parse(rootBefore);
+  await startBoundsDrag(rootModel, rootModel.rootPartId, 0, 0);
+  await page.mouse.up();
+  assert.equal(await exportZook(), rootBefore);
+  await expect(page.locator("#undo-command")).toBeDisabled();
+  for (const axis of [0, 1, 2]) {
+    await startBoundsDrag(rootModel, rootModel.rootPartId, axis);
+    await expect(page.locator("#undo-command")).toBeDisabled();
+    if (axis === 0) await shot("bounds-reshape-preview");
+    await page.mouse.up();
+    await expect(page.locator("#editor-announcement")).toHaveText("Reshape blob complete");
+    const committed = await exportZook();
+    assert.notEqual(committed, rootBefore);
+    await page.locator("#undo-command").click();
+    await expect(page.locator("#undo-command")).toBeDisabled();
+    assert.equal(await exportZook(), rootBefore);
+    await page.locator("#redo-command").click();
+    assert.equal(await exportZook(), committed);
+    await page.locator("#undo-command").click();
+  }
+  checks.push("Bounds reshape: all three root axes, synchronized preview, one-command Undo and byte-identical Redo");
+  for (const cancellation of ["escape", "focus", "capture", "resize"]) {
+    const canvas = page.locator("#game-canvas");
+    await canvas.evaluate(element => element.addEventListener("pointerdown", event => {
+      element.dataset.testPointer = String(event.pointerId);
+    }, { once: true }));
+    await startBoundsDrag(rootModel, rootModel.rootPartId, 0);
+    if (cancellation === "escape") await page.keyboard.press("Escape");
+    if (cancellation === "focus") await page.locator("#passport-command").focus();
+    if (cancellation === "capture") await canvas.evaluate(element => element.releasePointerCapture(Number(element.dataset.testPointer)));
+    if (cancellation === "resize") await page.setViewportSize({ width: 1200, height: 900 });
+    await page.mouse.up();
+    await expect(page.locator("#shape-width")).toHaveValue("1");
+    await expect(page.getByRole("dialog", { name: "File / system" })).toBeHidden();
+    assert.equal(await exportZook(), rootBefore);
+    if (cancellation === "resize") await page.setViewportSize({ width: 1280, height: 900 });
+  }
+  checks.push("Bounds reshape: Escape, external focus, actual capture loss and resize cancel without changing canonical bytes");
+  await page.locator("#mode-add").click();
+  await page.getByRole("button", { name: "Left", exact: true }).click();
+  await page.locator("#mode-add").click();
+  await page.locator("#placement-parent").selectOption("p0002");
+  await page.getByRole("button", { name: "Below", exact: true }).click();
+  await page.locator("#part-select").selectOption("p0002");
+  await page.locator("#attachment-facing-roll").fill("-25");
+  await page.locator("#attachment-apply").click();
+  await expect(page.locator("#editor-announcement")).toHaveText("Adjust position and facing complete");
+  await page.locator("#mirror-command").click();
+  await expect(page.locator("#part-summary")).toHaveText("5 parts");
+  await page.locator("#part-select").selectOption("p0003");
+  const nestedBefore = await exportZook(), nestedModel = JSON.parse(nestedBefore);
+  await startBoundsDrag(nestedModel, "p0003", 2, 0.4);
+  await shot("bounds-reshape-mirrored-preview");
+  await page.mouse.up();
+  await expect(page.locator("#editor-announcement")).toHaveText("Reshape blob complete");
+  const nestedAfter = await exportZook(), reshaped = JSON.parse(nestedAfter);
+  const nestedSelected = nestedModel.parts.find(part => part.id === "p0003");
+  for (const part of nestedModel.parts) {
+    const current = reshaped.parts.find(other => other.id === part.id);
+    assert.deepEqual(current.localTransform, part.localTransform);
+    assert.deepEqual(current.motion, part.motion);
+    if (part.mirrorGroupId === nestedSelected.mirrorGroupId) assert.ok(current.shape.lengthMeters > part.shape.lengthMeters + 0.3);
+    else assert.deepEqual(current.shape, part.shape);
+  }
+  await page.locator("#undo-command").click();
+  assert.equal(await exportZook(), nestedBefore);
+  await page.locator("#redo-command").click();
+  assert.equal(await exportZook(), nestedAfter);
+  await accessibility("Bounds reshape editor");
+  checks.push("Bounds reshape: rotated nested mirror partners, unchanged transforms/paths and exact Undo/Redo");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine}: ${checks.length} compiled-release checks passed.`);
 } catch (error) {
