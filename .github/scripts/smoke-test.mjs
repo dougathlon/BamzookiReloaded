@@ -1009,10 +1009,14 @@ try {
   await keyboardFocus(page.locator("#part-select"));
   await shot("keyboard-placement-focus");
   await page.locator("#part-select").selectOption("p0002");
-  await page.locator("#attachment-facing-roll").fill("-25");
+  await page.locator("#attachment-facing-roll").fill("-24");
   await keyboardActivate(page.locator("#attachment-apply"));
   await expect(page.locator("#editor-announcement")).toHaveText("Adjust position and facing complete");
   await keyboardFocus(page.locator("#attachment-apply"));
+  // Retain the mixed pointer-to-keyboard route as well as keyboard-only Apply.
+  await page.locator("#attachment-facing-roll").fill("-25");
+  await page.locator("#attachment-apply").click();
+  await expect(page.locator("#attachment-apply")).toBeEnabled({ timeout: 20_000 });
   await keyboardActivate(page.locator("#mirror-command"));
   await expect(page.locator("#part-summary")).toHaveText("5 parts");
   await keyboardFocus(page.locator("#part-select"));
