@@ -2104,49 +2104,33 @@ const inputOwnershipJourney = async () => {
   await page.locator("#simulator-stop").click();
   await expect(page.locator("#simulator-save-dialog")).toBeVisible();
   await page.locator("#simulator-replay-name").fill("Input ownership fixture");
-  const digestProbe = await page.evaluateHandle(() => {
+  const checksumFailure = await page.evaluateHandle(() => {
     const original = crypto.subtle.digest;
-    const state = { started: 0, completed: 0, failed: 0, durationsMs: [],
-      restore: () => { crypto.subtle.digest = original; } };
-    crypto.subtle.digest = async function (...args) {
-      state.started += 1;
-      const began = performance.now();
-      try {
-        const result = await original.apply(this, args);
-        state.completed += 1;
-        return result;
-      } catch (error) {
-        state.failed += 1;
-        throw error;
-      } finally { state.durationsMs.push(Math.round(performance.now() - began)); }
+    crypto.subtle.digest = function () {
+      crypto.subtle.digest = original;
+      return Promise.reject(new Error("Replay checksum temporarily unavailable"));
     };
-    return state;
+    return { restore: () => { crypto.subtle.digest = original; } };
   });
+  const stoppedTime = await page.locator("#simulator-time").innerText();
   try {
     await page.locator("#simulator-save").click();
-    await expect(page.locator("#simulator-save-dialog")).toBeHidden();
-  } catch (error) {
-    console.log("Visibility save digest progress:", await digestProbe.evaluate(({ started, completed, failed, durationsMs }) =>
-      ({ started, completed, failed, durationsMs })));
-    console.log("Visibility save boundary:", await page.evaluate(() => ({
-      hidden: document.hidden,
-      focused: document.hasFocus(),
-      status: document.querySelector("#simulator-save-status")?.textContent,
-      header: document.querySelector("#build-status")?.textContent,
-      busy: document.querySelector("#simulator-save")?.disabled,
-    })));
-    // Observe bounded late completion without converting the failed five-second
-    // assertion into a pass or changing any suite deadline.
-    await page.waitForTimeout(10_000);
-    console.log("Visibility save late progress:", await digestProbe.evaluate(({ started, completed, failed, durationsMs }) =>
-      ({ started, completed, failed, durationsMs })));
-    console.log("Visibility save late dialog:", await page.locator("#simulator-save-dialog").isVisible());
-    throw error;
+    await expect(page.locator("#simulator-save-status")).toHaveText("Replay checksum temporarily unavailable");
+    await expect(page.locator("#build-status")).toHaveText("Replay checksum temporarily unavailable");
+    await expect(page.locator("#simulator-save-dialog")).toBeVisible();
+    await expect(page.locator("#simulator-save")).toBeEnabled();
+    await expect(page.locator("#simulator-replay-name")).toHaveValue("Input ownership fixture");
+    await expect(page.locator("#simulator-time")).toHaveText(stoppedTime);
+    await shot("input-checksum-failure-retained");
   } finally {
-    await digestProbe.evaluate(state => state.restore());
-    await digestProbe.dispose();
+    await checksumFailure.evaluate(state => state.restore());
+    await checksumFailure.dispose();
   }
+  await page.locator("#simulator-save").click();
+  await expect(page.locator("#simulator-save-dialog")).toBeHidden();
+  await expect(page.locator("#build-status")).toHaveText("Simulator — evidence-bounded Provisional Play");
   recordCheck("Visibility: native window hide and restore freeze and restart live Simulator time, then save an ordinary recording");
+  recordCheck("Replay save: checksum failure retains the stopped recording and name, and retry saves it without a stale error");
 
   await switchKeepingDocument("motion-player");
   const replayOption = page.locator("#motion-replay-library option").filter({ hasText: "Input ownership fixture" });
@@ -2181,7 +2165,7 @@ try {
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15, "input-ownership": 7 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15, "input-ownership": 8 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
