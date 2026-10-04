@@ -2143,8 +2143,44 @@ const inputOwnershipJourney = async () => {
   await page.locator("#motion-play").click();
   await expect(page.locator("#motion-play")).toHaveText("Pause");
   await backgroundAndResume("#motion-timeline", "motion-player");
-  await page.locator("#motion-play").click();
-  await expect(page.locator("#motion-play")).toHaveText("Play");
+  const pauseInput = await page.evaluateHandle(() => {
+    const button = document.querySelector("#motion-play");
+    const events = [];
+    let mutations = 0;
+    const state = () => ({ hidden: document.hidden, focused: document.hasFocus(),
+      active: document.activeElement?.id, label: button.textContent, disabled: button.disabled,
+      tick: document.querySelector("#motion-timeline").value, mutations });
+    const observe = event => {
+      if (events.length >= 64) return;
+      events.push({ type: event.type, phase: event.eventPhase, trusted: event.isTrusted,
+        target: event.target?.id || event.target?.nodeName, prevented: event.defaultPrevented,
+        x: event.clientX, y: event.clientY,
+        hit: document.elementFromPoint(event.clientX, event.clientY)?.id, ...state() });
+    };
+    const types = ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
+    for (const type of types) {
+      document.addEventListener(type, observe, { capture: true, passive: true });
+      document.addEventListener(type, observe, { passive: true });
+    }
+    const observer = new MutationObserver(records => { mutations += records.length; });
+    observer.observe(button, { childList: true, characterData: true, subtree: true });
+    const before = state();
+    return { read: () => ({ before, after: state(), events }), dispose: () => {
+      observer.disconnect();
+      for (const type of types) {
+        document.removeEventListener(type, observe, true);
+        document.removeEventListener(type, observe, false);
+      }
+    } };
+  });
+  try {
+    await page.locator("#motion-play").click();
+    await expect(page.locator("#motion-play")).toHaveText("Play");
+  } finally {
+    console.log(`Restored-window pause input: ${JSON.stringify(await pauseInput.evaluate(value => value.read()))}`);
+    await pauseInput.evaluate(value => value.dispose());
+    await pauseInput.dispose();
+  }
   assert.equal(await exportReplay(), replay);
   await switchKeepingDocument("zook-kit");
   assert.equal(await exportZook(), changed);
