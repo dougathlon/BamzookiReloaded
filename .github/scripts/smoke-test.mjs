@@ -2104,10 +2104,30 @@ const inputOwnershipJourney = async () => {
   await page.locator("#simulator-stop").click();
   await expect(page.locator("#simulator-save-dialog")).toBeVisible();
   await page.locator("#simulator-replay-name").fill("Input ownership fixture");
-  await page.locator("#simulator-save").click();
+  const digestProbe = await page.evaluateHandle(() => {
+    const original = crypto.subtle.digest;
+    const state = { started: 0, completed: 0, failed: 0, durationsMs: [],
+      restore: () => { crypto.subtle.digest = original; } };
+    crypto.subtle.digest = async function (...args) {
+      state.started += 1;
+      const began = performance.now();
+      try {
+        const result = await original.apply(this, args);
+        state.completed += 1;
+        return result;
+      } catch (error) {
+        state.failed += 1;
+        throw error;
+      } finally { state.durationsMs.push(Math.round(performance.now() - began)); }
+    };
+    return state;
+  });
   try {
+    await page.locator("#simulator-save").click();
     await expect(page.locator("#simulator-save-dialog")).toBeHidden();
   } catch (error) {
+    console.log("Visibility save digest progress:", await digestProbe.evaluate(({ started, completed, failed, durationsMs }) =>
+      ({ started, completed, failed, durationsMs })));
     console.log("Visibility save boundary:", await page.evaluate(() => ({
       hidden: document.hidden,
       focused: document.hasFocus(),
@@ -2115,7 +2135,16 @@ const inputOwnershipJourney = async () => {
       header: document.querySelector("#build-status")?.textContent,
       busy: document.querySelector("#simulator-save")?.disabled,
     })));
+    // Observe bounded late completion without converting the failed five-second
+    // assertion into a pass or changing any suite deadline.
+    await page.waitForTimeout(10_000);
+    console.log("Visibility save late progress:", await digestProbe.evaluate(({ started, completed, failed, durationsMs }) =>
+      ({ started, completed, failed, durationsMs })));
+    console.log("Visibility save late dialog:", await page.locator("#simulator-save-dialog").isVisible());
     throw error;
+  } finally {
+    await digestProbe.evaluate(state => state.restore());
+    await digestProbe.dispose();
   }
   recordCheck("Visibility: native window hide and restore freeze and restart live Simulator time, then save an ordinary recording");
 
