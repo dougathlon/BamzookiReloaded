@@ -2143,44 +2143,33 @@ const inputOwnershipJourney = async () => {
   await page.locator("#motion-play").click();
   await expect(page.locator("#motion-play")).toHaveText("Pause");
   await backgroundAndResume("#motion-timeline", "motion-player");
-  const pauseInput = await page.evaluateHandle(() => {
-    const button = document.querySelector("#motion-play");
-    const events = [];
-    let mutations = 0;
-    const state = () => ({ hidden: document.hidden, focused: document.hasFocus(),
-      active: document.activeElement?.id, label: button.textContent, disabled: button.disabled,
-      tick: document.querySelector("#motion-timeline").value, mutations });
-    const observe = event => {
-      if (events.length >= 64) return;
-      events.push({ type: event.type, phase: event.eventPhase, trusted: event.isTrusted,
-        target: event.target?.id || event.target?.nodeName, prevented: event.defaultPrevented,
-        x: event.clientX, y: event.clientY,
-        hit: document.elementFromPoint(event.clientX, event.clientY)?.id, ...state() });
-    };
-    const types = ["pointerdown", "mousedown", "pointerup", "mouseup", "click"];
-    for (const type of types) {
-      document.addEventListener(type, observe, { capture: true, passive: true });
-      document.addEventListener(type, observe, { passive: true });
-    }
-    const observer = new MutationObserver(records => { mutations += records.length; });
-    observer.observe(button, { childList: true, characterData: true, subtree: true });
-    const before = state();
-    return { read: () => ({ before, after: state(), events }), dispose: () => {
-      observer.disconnect();
-      for (const type of types) {
-        document.removeEventListener(type, observe, true);
-        document.removeEventListener(type, observe, false);
-      }
-    } };
-  });
+  const pause = page.locator("#motion-play");
+  const pauseLabel = await pause.evaluateHandle(button => button.firstChild);
+  const pauseBounds = await pause.boundingBox();
+  assert.ok(pauseBounds, "Pause must be measurable");
   try {
-    await page.locator("#motion-play").click();
-    await expect(page.locator("#motion-play")).toHaveText("Play");
+    await page.mouse.move(pauseBounds.x + pauseBounds.width / 2, pauseBounds.y + pauseBounds.height / 2);
+    await page.mouse.down();
+    const pressedTick = await page.locator("#motion-timeline").inputValue();
+    await expect.poll(() => page.locator("#motion-timeline").inputValue()).not.toBe(pressedTick);
+    assert.equal(await pause.evaluate((button, label) => button.firstChild === label, pauseLabel), true,
+      "Live replay updates must preserve the pressed Pause label node");
   } finally {
-    console.log(`Restored-window pause input: ${JSON.stringify(await pauseInput.evaluate(value => value.read()))}`);
-    await pauseInput.evaluate(value => value.dispose());
-    await pauseInput.dispose();
+    await page.mouse.up();
+    await pauseLabel.dispose();
   }
+  await expect(pause).toHaveText("Play");
+  const pausedTick = await page.locator("#motion-timeline").inputValue();
+  await page.waitForTimeout(400);
+  await expect(page.locator("#motion-timeline")).toHaveValue(pausedTick);
+  await shot("input-replay-pause-held");
+  // Retain the original ordinary-click route as well as the held-pointer case.
+  await pause.click();
+  await expect(pause).toHaveText("Pause");
+  await expect.poll(() => page.locator("#motion-timeline").inputValue()).not.toBe(pausedTick);
+  await pause.click();
+  await expect(pause).toHaveText("Play");
+  recordCheck("Replay transport: live updates preserve the pressed Pause label and both held-release and ordinary clicks stop playback");
   assert.equal(await exportReplay(), replay);
   await switchKeepingDocument("zook-kit");
   assert.equal(await exportZook(), changed);
@@ -2201,7 +2190,7 @@ try {
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15, "input-ownership": 8 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15, "input-ownership": 9 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
