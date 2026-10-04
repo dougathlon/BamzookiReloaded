@@ -1972,7 +1972,8 @@ const inputOwnershipJourney = async () => {
     await expect(page.locator("#module-dirty-confirm")).toBeVisible();
     await page.locator("#module-dirty-cancel").click();
     await expect(page.locator(".shell")).toHaveAttribute("data-module", "zook-kit");
-    await page.locator("#module-launcher-close").click();
+    await expect(page.locator("#module-dirty-confirm")).toBeHidden();
+    await expect(page.locator("#module-launcher")).toBeHidden();
     await stationary("module-cancel");
     await switchKeepingDocument("simulator");
     await switchKeepingDocument("zook-kit");
