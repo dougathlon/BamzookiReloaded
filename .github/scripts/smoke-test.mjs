@@ -1714,7 +1714,11 @@ const browserRecoveryJourney = async () => {
     const replayOption = page.locator("#motion-replay-library option").filter({ hasText: "Browser recovery fixture" });
     await expect(replayOption).toHaveCount(1);
     await page.locator("#motion-replay-library").selectOption(await replayOption.getAttribute("value"));
-    await page.locator("#motion-load").click();
+    await keyboardActivate(page.locator("#motion-load"));
+    await expect(page.locator("#motion-play")).toBeEnabled({ timeout: 20_000 });
+    await keyboardFocus(page.locator("#motion-play"));
+    await shot("replay-load-focus");
+    recordCheck("Replay loading: keyboard Load selected hands focus to enabled, visibly focused Play");
     const replay = await exportReplay();
     await page.locator("#motion-loop").check();
     await page.locator("#motion-play").click();
@@ -1723,6 +1727,73 @@ const browserRecoveryJourney = async () => {
     await page.locator("#motion-play").click();
     await expect(page.locator("#motion-play")).toHaveText("Play");
     assert.equal(await exportReplay(), replay);
+
+    // A failed browser digest is an operational failure, not a corrupt replay.
+    // The one-shot fault is confined to this disposable CI browser context.
+    await page.evaluate(() => {
+      const original = crypto.subtle.digest;
+      crypto.subtle.digest = function () {
+        crypto.subtle.digest = original;
+        return Promise.reject(new TypeError("Simulated unavailable replay verification"));
+      };
+    });
+    await keyboardActivate(page.locator("#motion-load"));
+    await expect(page.locator("#motion-status")).toHaveText("Simulated unavailable replay verification");
+    await keyboardFocus(page.locator("#motion-load"));
+    await shot("replay-load-failure-focus");
+    assert.equal(await exportReplay(), replay, "Failed loading must preserve the previously loaded replay");
+    await keyboardActivate(page.locator("#motion-load"));
+    await expect(page.locator("#motion-status")).toHaveText("Loaded checksum-verified browser replay.");
+    await keyboardFocus(page.locator("#motion-play"));
+    assert.equal(await exportReplay(), replay);
+    recordCheck("Replay loading: failed verification returns focus to Load, preserves exact replay bytes and permits an ordinary retry");
+
+    for (const boundary of ["other-control", "open-dialog", "inactive-module"]) {
+      const pending = await page.evaluateHandle(() => {
+        const original = crypto.subtle.digest;
+        let started = false;
+        let resume;
+        crypto.subtle.digest = function (...args) {
+          crypto.subtle.digest = original;
+          started = true;
+          return new Promise(resolve => { resume = resolve; })
+            .then(() => Reflect.apply(original, this, args));
+        };
+        return { started: () => started, resume: () => resume?.(), restore: () => { crypto.subtle.digest = original; } };
+      });
+      try {
+        await keyboardActivate(page.locator("#motion-load"));
+        await expect.poll(() => pending.evaluate(state => state.started())).toBe(true);
+        await expect(page.locator("#motion-load")).toBeDisabled();
+        const modules = page.locator("#modules-command");
+        await keyboardNavigate(modules);
+        let owner = modules;
+        if (boundary !== "other-control") {
+          await page.keyboard.press("Enter");
+          owner = page.locator('#module-launcher [data-suite-module="motion-player"]');
+          await keyboardFocus(owner);
+        }
+        if (boundary === "inactive-module") {
+          await keyboardActivate(page.locator('#module-launcher [data-suite-module="zook-kit"]'));
+          await expect(page.locator("#module-launcher")).toBeHidden();
+          await expect(page.locator(".shell")).toHaveAttribute("data-module", "zook-kit");
+          owner = modules;
+        }
+        await pending.evaluate(state => state.resume());
+        await expect(page.locator("#motion-load")).toBeEnabled({ timeout: 20_000 });
+        await keyboardFocus(owner);
+        if (boundary === "open-dialog") {
+          await shot("replay-load-modal-focus");
+          await page.keyboard.press("Escape");
+        }
+        if (boundary === "inactive-module") await module("motion-player");
+        assert.equal(await exportReplay(), replay, `${boundary}: delayed loading must not change replay bytes`);
+      } finally {
+        await pending.evaluate(state => { state.resume(); state.restore(); });
+        await pending.dispose();
+      }
+    }
+    recordCheck("Replay loading: delayed completion respects another focused control, an open dialog and an inactive module");
     await module("zook-kit");
     assert.equal(await exportZook(), changed);
     recordCheck("Motion Player: real WebGL loss freezes the playing timeline, restores playback and preserves exact replay and Zook bytes offline");
@@ -1743,7 +1814,7 @@ try {
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 9 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 12 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);

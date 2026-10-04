@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 103110,
-      "sha256": "4c5e330265c47b652d11c28697695af13562e540d2c2f68998dd5dfafe9358e3"
+      "bytes": 106938,
+      "sha256": "38c19cb0a2c27d6a8398ba21d6acf3f27ff71eb6b5bd43ff07417ce9260d4e71"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
@@ -27,19 +27,19 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
+      "path": "site/assets/index-CB2qOMYb.js",
+      "bytes": 3868725,
+      "sha256": "54e75ccb667c487731451d0a799aa46538dd90eb997a558e39775abcea706417"
+    },
+    {
       "path": "site/assets/index-Cmbyuj8d.css",
       "bytes": 31988,
       "sha256": "ce5e961c7a30683c17b3798633507befc0a794c85852c1f8c6dd52eed47b4d60"
     },
     {
-      "path": "site/assets/index-DUKcLIQ1.js",
-      "bytes": 3868623,
-      "sha256": "4efe1ef537a33b245cfffabee59c3d6770f309eb98d6f8bf35005fe3b47cb60a"
-    },
-    {
       "path": "site/index.html",
       "bytes": 52833,
-      "sha256": "3905436f678d5f2de296d2dbd07c015c1578bf4d5bfeb55a097b1a7fdf2cebfd"
+      "sha256": "f1fd09de0807b591b85dc2ecc1039f8f542ae5c96b9345ce390efeb0eca26b8b"
     },
     {
       "path": "site/THIRD_PARTY_NOTICES.txt",
