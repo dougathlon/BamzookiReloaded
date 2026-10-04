@@ -4,6 +4,7 @@ import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 
 const require = createRequire(process.env.BROWSER_TEST_RUNTIME
   ? path.join(path.resolve(process.env.BROWSER_TEST_RUNTIME), "package.json") : import.meta.url);
@@ -41,6 +42,7 @@ const browser = await playwright[engine].launch({
   ...(engine === "firefox" ? { firefoxUserPrefs: {
     "webgl.force-enabled": true,
     "webgl.disable-fail-if-major-performance-caveat": true,
+    ...(suite === "input-ownership" ? { "layout.testing.top-level-always-active": false } : {}),
   } } : {}),
 });
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
@@ -1983,24 +1985,47 @@ const inputOwnershipJourney = async () => {
   assert.equal(await exportZook(), changed);
   recordCheck("Input ownership: dirty module Cancel and Keep-and-switch preserve the document and do not resume held camera movement");
 
+  // Playwright forces foreground state by default. Remove those framework
+  // overrides; never set document.hidden or dispatch a visibility event.
+  assert.equal(process.env.GITHUB_ACTIONS, "true", "Native window verification is confined to isolated hosted CI");
+  assert.equal(require("playwright-core/package.json").version, "1.62.1", "Revalidate visibility adapters after a test-runtime upgrade");
+  if (engine === "chromium") {
+    const session = await context.newCDPSession(page);
+    await session.send("Emulation.setFocusEmulationEnabled", { enabled: false });
+    await session.detach();
+  } else if (engine === "webkit") {
+    // This pinned internal adapter is necessary because WebKit has no public
+    // protocol-session API. An omitted active value removes the override.
+    const session = page._connection?.toImpl?.(page)?.delegate?._pageProxySession;
+    assert.equal(typeof session?.send, "function", "Pinned WebKit visibility adapter is unavailable");
+    await session.send("Emulation.setActiveAndFocused", {});
+  }
+  const windows = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "^BAMZOOKi.*browser reconstruction"],
+    { encoding: "utf8", timeout: 10_000 }).trim().split("\n");
+  assert.equal(windows.length, 1, "Exactly one owned game window must exist in the isolated CI display");
+  const windowId = windows[0];
+  assert.match(windowId, /^\d+$/, "Native window identity must be numeric");
+  const windowCommand = command => execFileSync("xdotool", [command, "--sync", windowId], { timeout: 10_000 });
   const backgroundAndResume = async (clockSelector, name) => {
     const clock = page.locator(clockSelector);
     const read = () => clock.evaluate(element => element instanceof HTMLInputElement ? element.value : element.textContent);
-    const foreground = await context.newPage();
     try {
-      await foreground.bringToFront();
+      windowCommand("windowunmap");
       await expect.poll(() => page.evaluate(() => document.hidden)).toBe(true);
       await expect(page.locator("#build-status")).toHaveText("Paused while this tab is hidden");
       const hidden = await read();
       await page.waitForTimeout(400);
-      assert.equal(await read(), hidden, `${name}: public clock must freeze during real tab backgrounding`);
+      assert.equal(await read(), hidden, `${name}: public clock must freeze while the native window is hidden`);
+      windowCommand("windowmap");
+      windowCommand("windowfocus");
       await page.bringToFront();
       await expect.poll(() => page.evaluate(() => document.hidden)).toBe(false);
       await expect(page.locator("#build-status")).not.toHaveText("Paused while this tab is hidden");
       await expect.poll(read).not.toBe(hidden);
       await shot(`input-${name}-resumed`);
     } finally {
-      await foreground.close();
+      windowCommand("windowmap");
+      windowCommand("windowfocus");
       await page.bringToFront();
     }
   };
@@ -2011,7 +2036,7 @@ const inputOwnershipJourney = async () => {
   await page.locator("#test-timer-stop").click();
   await page.locator("#mode-select").click();
   assert.equal(await exportZook(), changed);
-  recordCheck("Visibility: real background and resume freeze and restart the public Test timer without changing Zook bytes");
+  recordCheck("Visibility: native window hide and restore freeze and restart the public Test timer without changing Zook bytes");
 
   await switchKeepingDocument("simulator");
   await page.locator("#simulator-contest-list button").filter({ hasText: "Dodgy Zook" }).click();
@@ -2026,7 +2051,7 @@ const inputOwnershipJourney = async () => {
   await page.locator("#simulator-replay-name").fill("Input ownership fixture");
   await page.locator("#simulator-save").click();
   await expect(page.locator("#simulator-save-dialog")).toBeHidden();
-  recordCheck("Visibility: real background and resume freeze and restart live Simulator time, then save an ordinary recording");
+  recordCheck("Visibility: native window hide and restore freeze and restart live Simulator time, then save an ordinary recording");
 
   await switchKeepingDocument("motion-player");
   const replayOption = page.locator("#motion-replay-library option").filter({ hasText: "Input ownership fixture" });
@@ -2048,7 +2073,7 @@ const inputOwnershipJourney = async () => {
   assert.equal(await exportZook(), original, "All input/visibility handoffs must retain Undo history");
   await page.locator("#redo-command").click();
   assert.equal(await exportZook(), changed, "All input/visibility handoffs must retain Redo history");
-  recordCheck("Visibility: real background and resume freeze and restart replay, preserving exact replay, dirty Zook and Undo/Redo bytes");
+  recordCheck("Visibility: native window hide and restore freeze and restart replay, preserving exact replay, dirty Zook and Undo/Redo bytes");
 };
 
 try {
