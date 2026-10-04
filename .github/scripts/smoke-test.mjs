@@ -32,9 +32,12 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 await mkdir(output, { recursive: true });
 // The hosted runner has no physical GPU. Firefox needs an X display and an
-// explicit software-WebGL test profile; these preferences never enter the game.
+// explicit software-WebGL test profile. The visibility suite also needs a
+// headed Chromium software driver; neither setting enters the game.
 const browser = await playwright[engine].launch({
   headless: engine !== "firefox" && suite !== "input-ownership",
+  ...(engine === "chromium" && suite === "input-ownership"
+    ? { args: ["--use-gl=angle", "--use-angle=swiftshader"] } : {}),
   ...(engine === "firefox" ? { firefoxUserPrefs: {
     "webgl.force-enabled": true,
     "webgl.disable-fail-if-major-performance-caveat": true,
