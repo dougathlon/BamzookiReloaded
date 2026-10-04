@@ -1735,26 +1735,40 @@ const browserRecoveryJourney = async () => {
 
     // A failed browser digest is an operational failure, not a corrupt replay.
     // The one-shot fault is confined to this disposable CI browser context.
-    await page.evaluate(() => {
+    const failNextReplayVerification = () => page.evaluate(() => {
       const original = crypto.subtle.digest;
       crypto.subtle.digest = function () {
         crypto.subtle.digest = original;
         return Promise.reject(new TypeError("Simulated unavailable replay verification"));
       };
     });
+    await failNextReplayVerification();
     await keyboardActivate(page.locator("#motion-load"));
     await expect(page.locator("#motion-status")).toHaveText("Simulated unavailable replay verification");
+    await expect(page.locator("#build-status")).toHaveText("Simulated unavailable replay verification");
     await keyboardFocus(page.locator("#motion-load"));
     await shot("replay-load-failure-focus");
     assert.equal(await exportReplay(), replay, "Failed loading must preserve the previously loaded replay");
+    await keyboardActivate(page.locator("#motion-refresh"));
+    await expect(page.locator("#motion-status")).toHaveText("1 browser replay available.");
+    await expect(page.locator("#build-status")).toHaveText("Simulated unavailable replay verification");
+    recordCheck("Replay status: a successful unrelated Refresh does not dismiss the failed Load");
     await keyboardActivate(page.locator("#motion-load"));
     await expect(page.locator("#motion-status")).toHaveText("Loaded checksum-verified browser replay.");
+    await expect(page.locator("#build-status")).toHaveText("Motion Player — browser-native sampled playback; legacy .bvz blocked");
     await keyboardFocus(page.locator("#motion-play"));
+    await shot("replay-load-retry-status");
     assert.equal(await exportReplay(), replay);
     recordCheck("Replay loading: failed verification returns focus to Load, preserves exact replay bytes and permits an ordinary retry");
 
-    for (const boundary of ["other-control", "open-dialog", "inactive-module"]) {
+    for (const boundary of ["other-control", "open-dialog", "inactive-module", "graphics-loss"]) {
       reportProgress(`Replay delayed completion: ${boundary} setup`);
+      if (boundary === "inactive-module" || boundary === "graphics-loss") {
+        await failNextReplayVerification();
+        await keyboardActivate(page.locator("#motion-load"));
+        await expect(page.locator("#build-status")).toHaveText("Simulated unavailable replay verification");
+        await keyboardFocus(page.locator("#motion-load"));
+      }
       await keyboardNavigate(page.locator("#motion-load"));
       const pending = await page.evaluateHandle(() => {
         const original = crypto.subtle.digest;
@@ -1768,6 +1782,7 @@ const browserRecoveryJourney = async () => {
         };
         return { started: () => started, resume: () => resume?.(), restore: () => { crypto.subtle.digest = original; } };
       });
+      let lostContext = null;
       try {
         await page.keyboard.press("Enter");
         await expect.poll(() => pending.evaluate(state => state.started())).toBe(true);
@@ -1780,7 +1795,7 @@ const browserRecoveryJourney = async () => {
         const modules = page.locator("#modules-command");
         await keyboardNavigate(modules);
         let owner = modules;
-        if (boundary !== "other-control") {
+        if (boundary === "open-dialog" || boundary === "inactive-module") {
           await page.keyboard.press("Enter");
           owner = page.locator('#module-launcher [data-suite-module="motion-player"]');
           await keyboardFocus(owner);
@@ -1791,21 +1806,53 @@ const browserRecoveryJourney = async () => {
           await expect(page.locator(".shell")).toHaveAttribute("data-module", "zook-kit");
           owner = modules;
         }
+        if (boundary === "graphics-loss") {
+          lostContext = await page.locator("#motion-canvas").evaluateHandle(canvas => {
+            const extension = canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context");
+            if (!extension) throw new Error("WebGL context-loss extension unavailable");
+            return { canvas, extension };
+          });
+          await lostContext.evaluate(({ canvas, extension }) => new Promise(resolve => {
+            canvas.addEventListener("webglcontextlost", () => resolve(), { once: true });
+            extension.loseContext();
+          }));
+          await expect(page.locator("#motion-canvas")).toHaveAttribute("data-context-state", "lost");
+          await expect(page.locator("#build-status")).toContainText("paused while the graphics context recovers");
+        }
+        const newerStatus = await page.locator("#build-status").innerText();
         await pending.evaluate(state => state.resume());
         await expect(page.locator("#motion-load")).toBeEnabled({ timeout: 20_000 });
         await keyboardFocus(owner);
+        if (boundary === "inactive-module" || boundary === "graphics-loss") {
+          await expect(page.locator("#build-status")).toHaveText(newerStatus);
+        }
         if (boundary === "open-dialog") {
           await shot("replay-load-modal-focus");
           await page.keyboard.press("Escape");
+        }
+        if (boundary === "graphics-loss") {
+          await expect(page.locator("#motion-status")).toHaveText("Loaded checksum-verified browser replay.");
+          await shot("replay-load-newer-graphics-status");
+          await lostContext.evaluate(({ extension }) => extension.restoreContext());
+          await expect(page.locator("#motion-canvas")).toHaveAttribute("data-context-state", "ready");
+          await expect(page.locator("#build-status")).toHaveText("Motion Player — browser-native sampled playback; legacy .bvz blocked");
+          await shot("replay-load-retry-restored-graphics");
         }
         if (boundary === "inactive-module") await module("motion-player");
         assert.equal(await exportReplay(), replay, `${boundary}: delayed loading must not change replay bytes`);
       } finally {
         await pending.evaluate(state => { state.resume(); state.restore(); });
         await pending.dispose();
+        if (lostContext !== null) {
+          await lostContext.evaluate(({ canvas, extension }) => {
+            if (canvas.dataset.contextState === "lost") extension.restoreContext();
+          });
+          await lostContext.dispose();
+        }
       }
     }
     recordCheck("Replay loading: delayed completion respects another focused control, an open dialog and an inactive module");
+    recordCheck("Replay status: delayed successful retry preserves newer module and real graphics-loss status, then renders after restoration");
     await module("zook-kit");
     assert.equal(await exportZook(), changed);
     recordCheck("Motion Player: real WebGL loss freezes the playing timeline, restores playback and preserves exact replay and Zook bytes offline");
@@ -1826,7 +1873,7 @@ try {
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 13 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
