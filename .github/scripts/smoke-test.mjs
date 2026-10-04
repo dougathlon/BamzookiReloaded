@@ -2002,24 +2002,33 @@ const inputOwnershipJourney = async () => {
     assert.equal(typeof session?.send, "function", "Pinned WebKit visibility adapter is unavailable");
     await session.send("Emulation.setActiveAndFocused", {});
   }
-  const windows = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "^BAMZOOKi.*browser reconstruction"],
-    { encoding: "utf8", timeout: 10_000 }).trim().split("\n");
-  assert.equal(windows.length, 1, "Exactly one owned game window must exist in the isolated CI display");
-  const windowId = windows[0];
+  const windows = execFileSync("xdotool", ["search", "--onlyvisible", "--name", ".*"],
+    { encoding: "utf8", timeout: 10_000 }).trim().split("\n").map(id => ({ id,
+      title: execFileSync("xdotool", ["getwindowname", id], { encoding: "utf8", timeout: 10_000 }).trim(),
+    }));
+  console.log(`Isolated native windows: ${JSON.stringify(windows)}`);
+  let gameWindows = windows.filter(({ title }) => /^BAMZOOKi.*browser reconstruction/.test(title));
+  if (engine === "webkit" && gameWindows.length === 0) {
+    const miniBrowserWindows = execFileSync("xdotool", ["search", "--onlyvisible", "--class", "^MiniBrowser$"],
+      { encoding: "utf8", timeout: 10_000 }).trim().split("\n");
+    gameWindows = windows.filter(({ id }) => miniBrowserWindows.includes(id));
+  }
+  assert.equal(gameWindows.length, 1, "Exactly one owned game window must exist in the isolated CI display");
+  const windowId = gameWindows[0].id;
   assert.match(windowId, /^\d+$/, "Native window identity must be numeric");
   const windowCommand = command => execFileSync("xdotool", [command, "--sync", windowId], { timeout: 10_000 });
   const backgroundAndResume = async (clockSelector, name) => {
     const clock = page.locator(clockSelector);
     const read = () => clock.evaluate(element => element instanceof HTMLInputElement ? element.value : element.textContent);
     try {
-      windowCommand("windowunmap");
+      windowCommand("windowminimize");
       await expect.poll(() => page.evaluate(() => document.hidden)).toBe(true);
       await expect(page.locator("#build-status")).toHaveText("Paused while this tab is hidden");
       const hidden = await read();
       await page.waitForTimeout(400);
       assert.equal(await read(), hidden, `${name}: public clock must freeze while the native window is hidden`);
       windowCommand("windowmap");
-      windowCommand("windowfocus");
+      windowCommand("windowactivate");
       await page.bringToFront();
       await expect.poll(() => page.evaluate(() => document.hidden)).toBe(false);
       await expect(page.locator("#build-status")).not.toHaveText("Paused while this tab is hidden");
@@ -2027,7 +2036,7 @@ const inputOwnershipJourney = async () => {
       await shot(`input-${name}-resumed`);
     } finally {
       windowCommand("windowmap");
-      windowCommand("windowfocus");
+      windowCommand("windowactivate");
       await page.bringToFront();
     }
   };

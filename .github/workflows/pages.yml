@@ -37,7 +37,7 @@ jobs:
 
       - name: Install native window controls for visibility verification
         if: matrix.suite == 'input-ownership'
-        run: sudo apt-get install -y --no-install-recommends xdotool
+        run: sudo apt-get install -y --no-install-recommends xdotool openbox
 
       - name: Play the compiled release
         env:
@@ -46,7 +46,13 @@ jobs:
           BROWSER_TEST_SUITE: ${{ matrix.suite }}
           BROWSER_TEST_OUTPUT: ${{ runner.temp }}/browser-results
           LIBGL_ALWAYS_SOFTWARE: "1"
-        run: xvfb-run --auto-servernum node .github/scripts/smoke-test.mjs
+        run: |
+          xvfb-run --auto-servernum sh -c '
+            if [ "$BROWSER_TEST_SUITE" = "input-ownership" ]; then
+              openbox --sm-disable >/dev/null 2>&1 &
+            fi
+            exec node .github/scripts/smoke-test.mjs
+          '
 
       - name: Retain public-game screenshots and test summary
         if: always()
