@@ -1988,7 +1988,9 @@ const inputOwnershipJourney = async () => {
   // Playwright forces foreground state by default. Remove those framework
   // overrides; never set document.hidden or dispatch a visibility event.
   assert.equal(process.env.GITHUB_ACTIONS, "true", "Native window verification is confined to isolated hosted CI");
-  assert.equal(require("playwright-core/package.json").version, "1.62.1", "Revalidate visibility adapters after a test-runtime upgrade");
+  const browserRuntimeRequire = createRequire(require.resolve("playwright/package.json"));
+  assert.equal(require("playwright/package.json").version, "1.62.1", "Revalidate visibility adapters after a test-runtime upgrade");
+  assert.equal(browserRuntimeRequire("playwright-core/package.json").version, "1.62.1", "The active browser driver must match the pinned runtime");
   if (engine === "chromium") {
     const session = await context.newCDPSession(page);
     await session.send("Emulation.setFocusEmulationEnabled", { enabled: false });
