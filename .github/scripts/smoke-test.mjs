@@ -13,7 +13,7 @@ const { default: AxeBuilder } = require("@axe-core/playwright");
 const engine = process.env.BROWSER_TEST_ENGINE ?? "chromium";
 assert.ok(["chromium", "firefox", "webkit"].includes(engine), "Unsupported browser test engine");
 const suite = process.env.BROWSER_TEST_SUITE;
-assert.ok(["contests", "editor", "trial-focus", "storage", "browser-recovery"].includes(suite), "Unsupported browser test suite");
+assert.ok(["contests", "editor", "trial-focus", "storage", "browser-recovery", "input-ownership"].includes(suite), "Unsupported browser test suite");
 const output = path.resolve(process.env.BROWSER_TEST_OUTPUT ?? "browser-results");
 const site = await realpath("site");
 const prefix = "/BamzookiReloaded/";
@@ -34,7 +34,7 @@ await mkdir(output, { recursive: true });
 // The hosted runner has no physical GPU. Firefox needs an X display and an
 // explicit software-WebGL test profile; these preferences never enter the game.
 const browser = await playwright[engine].launch({
-  headless: engine !== "firefox",
+  headless: engine !== "firefox" && suite !== "input-ownership",
   ...(engine === "firefox" ? { firefoxUserPrefs: {
     "webgl.force-enabled": true,
     "webgl.disable-fail-if-major-performance-caveat": true,
@@ -1864,16 +1864,200 @@ const browserRecoveryJourney = async () => {
   }
 };
 
+const inputOwnershipJourney = async () => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`${origin}${prefix}`);
+  await expect(page.locator("#app")).toHaveAttribute("aria-busy", "false");
+  await page.locator("#loader-tutorial").click();
+  await expect(page.locator("#part-summary")).toHaveText("9 parts");
+  const original = await exportZook();
+  const width = page.getByLabel("Width", { exact: true });
+  await width.fill("0.77");
+  const changed = await exportZook();
+  assert.notEqual(changed, original);
+
+  // Capture an unobscured floor strip without changing focus, hiding controls,
+  // or triggering the ownership boundary the test is supposed to exercise.
+  const canvas = page.locator("#game-canvas");
+  const box = await canvas.boundingBox();
+  assert.ok(box, "Editor canvas must be measurable");
+  const clip = { x: Math.ceil(box.x + 16), y: Math.ceil(box.y + box.height * 0.45),
+    width: Math.floor(box.width * 0.08), height: Math.floor(box.height * 0.3) };
+  const cameraPixels = async name => {
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    return createHash("sha256").update(await page.screenshot({ clip,
+      path: path.join(output, `${engine}-ownership-camera-${name}.png`) })).digest("hex");
+  };
+  const stationary = async name => {
+    const before = await cameraPixels(`${name}-before`);
+    await page.waitForTimeout(400);
+    assert.equal(await cameraPixels(`${name}-after`), before, `${name}: released camera must remain stationary`);
+  };
+  const beginHeldCamera = async name => {
+    await page.locator("#modules-command").focus();
+    await page.locator("#modules-command").hover();
+    await page.keyboard.press("Home");
+    const before = await cameraPixels(`${name}-home`);
+    await page.keyboard.down("w");
+    await page.waitForTimeout(300);
+    assert.notEqual(await cameraPixels(`${name}-held`), before, `${name}: positive control must visibly move the camera`);
+  };
+  const switchKeepingDocument = async name => {
+    await page.locator("#modules-command").click();
+    await page.locator(`#module-launcher [data-suite-module="${name}"]`).click();
+    if (await page.locator("#module-dirty-confirm").isVisible()) await page.locator("#module-dirty-continue").click();
+    await expect(page.locator("#module-launcher")).toBeHidden();
+    await expect(page.locator(".shell")).toHaveAttribute("data-module", name);
+  };
+
+  await beginHeldCamera("editable");
+  try {
+    await width.focus();
+    await expect(width).toBeFocused();
+    await stationary("editable-held");
+    await page.keyboard.up("w");
+    await page.keyboard.down("w");
+    await stationary("editable-new-key");
+    await expect(width).toBeFocused();
+    await expect(width).toHaveValue("0.77");
+    await shot("input-editable-owner");
+  } finally { await page.keyboard.up("w"); }
+  assert.equal(await exportZook(), changed);
+  recordCheck("Input ownership: editable focus releases held camera movement, suppresses new movement and preserves exact dirty Zook bytes");
+
+  await beginHeldCamera("help");
+  const help = page.getByRole("dialog", { name: "How to make a Zook" });
+  try {
+    await page.keyboard.press("F1");
+    await expect(help).toBeVisible();
+    const helpBox = await help.boundingBox();
+    assert.ok(helpBox && (clip.x + clip.width <= helpBox.x || clip.y + clip.height <= helpBox.y ||
+      clip.x >= helpBox.x + helpBox.width || clip.y >= helpBox.y + helpBox.height), "Help must not occlude the observed floor strip");
+    await stationary("help-held");
+    await page.keyboard.up("w");
+    await page.keyboard.down("w");
+    await stationary("help-new-key");
+    await expect(help.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+    await shot("input-help-owner");
+    await help.getByRole("button", { name: "Close", exact: true }).click();
+    await stationary("help-return");
+  } finally { await page.keyboard.up("w"); }
+  assert.equal(await exportZook(), changed);
+  recordCheck("Input ownership: Help releases held camera movement, suppresses new movement and closes without resumed drift or document changes");
+
+  await beginHeldCamera("loader");
+  try {
+    await page.locator("#loader-command").click();
+    await expect(page.locator("#zook-loader")).toBeVisible();
+    await page.waitForTimeout(400);
+    await page.keyboard.up("w");
+    await page.keyboard.down("w");
+    await page.waitForTimeout(400);
+    await shot("input-loader-owner");
+    await page.getByRole("button", { name: "Continue current Zook", exact: true }).click();
+    await expect(page.locator("#zook-loader")).toBeHidden();
+    await stationary("loader-return");
+  } finally { await page.keyboard.up("w"); }
+  assert.equal(await exportZook(), changed);
+  recordCheck("Input ownership: Loader returns from held and newly pressed camera keys without resumed drift or document changes");
+
+  await beginHeldCamera("module");
+  try {
+    await page.locator("#modules-command").click();
+    await page.locator('#module-launcher [data-suite-module="simulator"]').click();
+    await expect(page.locator("#module-dirty-confirm")).toBeVisible();
+    await page.locator("#module-dirty-cancel").click();
+    await expect(page.locator(".shell")).toHaveAttribute("data-module", "zook-kit");
+    await page.locator("#module-launcher-close").click();
+    await stationary("module-cancel");
+    await switchKeepingDocument("simulator");
+    await switchKeepingDocument("zook-kit");
+    await stationary("module-return");
+    await shot("input-module-return");
+  } finally { await page.keyboard.up("w"); }
+  assert.equal(await exportZook(), changed);
+  recordCheck("Input ownership: dirty module Cancel and Keep-and-switch preserve the document and do not resume held camera movement");
+
+  const backgroundAndResume = async (clockSelector, name) => {
+    const clock = page.locator(clockSelector);
+    const read = () => clock.evaluate(element => element instanceof HTMLInputElement ? element.value : element.textContent);
+    const foreground = await context.newPage();
+    try {
+      await foreground.bringToFront();
+      await expect.poll(() => page.evaluate(() => document.hidden)).toBe(true);
+      await expect(page.locator("#build-status")).toHaveText("Paused while this tab is hidden");
+      const hidden = await read();
+      await page.waitForTimeout(400);
+      assert.equal(await read(), hidden, `${name}: public clock must freeze during real tab backgrounding`);
+      await page.bringToFront();
+      await expect.poll(() => page.evaluate(() => document.hidden)).toBe(false);
+      await expect(page.locator("#build-status")).not.toHaveText("Paused while this tab is hidden");
+      await expect.poll(read).not.toBe(hidden);
+      await shot(`input-${name}-resumed`);
+    } finally {
+      await foreground.close();
+      await page.bringToFront();
+    }
+  };
+  await page.locator("#mode-test").click();
+  await page.locator("#test-timer-start").click();
+  await expect.poll(async () => Number.parseFloat(await page.locator("#test-timer-value").innerText())).toBeGreaterThan(0.1);
+  await backgroundAndResume("#test-timer-value", "test");
+  await page.locator("#test-timer-stop").click();
+  await page.locator("#mode-select").click();
+  assert.equal(await exportZook(), changed);
+  recordCheck("Visibility: real background and resume freeze and restart the public Test timer without changing Zook bytes");
+
+  await switchKeepingDocument("simulator");
+  await page.locator("#simulator-contest-list button").filter({ hasText: "Dodgy Zook" }).click();
+  await page.locator("#simulator-zook-1").selectOption("tutorial");
+  await page.locator("#simulator-zook-2").selectOption("tutorial");
+  await page.locator("#simulator-start").click();
+  await expect.poll(async () => Number.parseFloat(await page.locator("#simulator-time").innerText()),
+    { timeout: 40_000 }).toBeGreaterThan(0.3);
+  await backgroundAndResume("#simulator-time", "simulator");
+  await page.locator("#simulator-stop").click();
+  await expect(page.locator("#simulator-save-dialog")).toBeVisible();
+  await page.locator("#simulator-replay-name").fill("Input ownership fixture");
+  await page.locator("#simulator-save").click();
+  await expect(page.locator("#simulator-save-dialog")).toBeHidden();
+  recordCheck("Visibility: real background and resume freeze and restart live Simulator time, then save an ordinary recording");
+
+  await switchKeepingDocument("motion-player");
+  const replayOption = page.locator("#motion-replay-library option").filter({ hasText: "Input ownership fixture" });
+  await expect(replayOption).toHaveCount(1);
+  await page.locator("#motion-replay-library").selectOption(await replayOption.getAttribute("value"));
+  await page.locator("#motion-load").click();
+  await expect(page.locator("#motion-play")).toBeEnabled();
+  const replay = await exportReplay();
+  await page.locator("#motion-loop").check();
+  await page.locator("#motion-play").click();
+  await expect(page.locator("#motion-play")).toHaveText("Pause");
+  await backgroundAndResume("#motion-timeline", "motion-player");
+  await page.locator("#motion-play").click();
+  await expect(page.locator("#motion-play")).toHaveText("Play");
+  assert.equal(await exportReplay(), replay);
+  await switchKeepingDocument("zook-kit");
+  assert.equal(await exportZook(), changed);
+  await page.locator("#undo-command").click();
+  assert.equal(await exportZook(), original, "All input/visibility handoffs must retain Undo history");
+  await page.locator("#redo-command").click();
+  assert.equal(await exportZook(), changed, "All input/visibility handoffs must retain Redo history");
+  recordCheck("Visibility: real background and resume freeze and restart replay, preserving exact replay, dirty Zook and Undo/Redo bytes");
+};
+
 try {
   if (suite === "trial-focus") await trialFocusJourney();
   else if (suite === "storage") await storageJourney();
   else if (suite === "browser-recovery") await browserRecoveryJourney();
+  else if (suite === "input-ownership") await inputOwnershipJourney();
   else {
     const library = await prepareLibraryJourney();
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 15, "input-ownership": 7 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);

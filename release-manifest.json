@@ -3,8 +3,8 @@
   "files": [
     {
       "path": ".github/scripts/smoke-test.mjs",
-      "bytes": 110977,
-      "sha256": "cfff9cadb17df5a0fa77d8bc3693fe44134f39ce7dedf0bfb19c8d472d278125"
+      "bytes": 120971,
+      "sha256": "95a90027a0b5dfdf0a113b972f10a593e9ad26e68bd5ae6a5d6dec3a9e51f6a1"
     },
     {
       "path": ".github/scripts/verify-release.mjs",
@@ -13,8 +13,8 @@
     },
     {
       "path": ".github/workflows/pages.yml",
-      "bytes": 2688,
-      "sha256": "f68bb8f2fd88bce4689505d9e319a0a9fc675c71b1f43127ede8fb1760be2b55"
+      "bytes": 2742,
+      "sha256": "35acfe3f809abc0ebf5845bc49ec44badb53262f6c38d7f1446beae7fe45a530"
     },
     {
       "path": "README.md",

@@ -15,12 +15,12 @@ concurrency:
 jobs:
   browser-check:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ (matrix.suite == 'trial-focus' || matrix.suite == 'storage' || matrix.suite == 'browser-recovery') && 8 || matrix.browser == 'chromium' && 25 || 15 }}
+    timeout-minutes: ${{ (matrix.suite == 'trial-focus' || matrix.suite == 'storage' || matrix.suite == 'browser-recovery' || matrix.suite == 'input-ownership') && 8 || matrix.browser == 'chromium' && 25 || 15 }}
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-        suite: [contests, editor, trial-focus, storage, browser-recovery]
+        suite: [contests, editor, trial-focus, storage, browser-recovery, input-ownership]
     steps:
       - name: Check out static distribution
         uses: actions/checkout@v7
