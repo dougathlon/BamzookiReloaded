@@ -1727,6 +1727,11 @@ const browserRecoveryJourney = async () => {
     await page.locator("#motion-play").click();
     await expect(page.locator("#motion-play")).toHaveText("Play");
     assert.equal(await exportReplay(), replay);
+    await expect(page.locator("#motion-export")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await keyboardFocus(page.locator("#motion-eject"));
+    await shot("replay-export-reverse-focus");
+    recordCheck("Replay export: pointer Export preserves exact bytes and native reverse Tab reaches visibly focused Eject");
 
     // A failed browser digest is an operational failure, not a corrupt replay.
     // The one-shot fault is confined to this disposable CI browser context.
@@ -1814,7 +1819,7 @@ try {
     if (suite === "contests") await contestReplayJourney(library);
     else await editorFileJourney(library);
   }
-  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 12 }[suite], "Every suite check must execute");
+  assert.equal(checks.length, { contests: 38, editor: 34, "trial-focus": 3, storage: 10, "browser-recovery": 13 }[suite], "Every suite check must execute");
   assert.equal(new Set(checks).size, checks.length, "Suite checks must have distinct identities");
   assert.deepEqual(errors, [], "Browser console, script, network errors");
   console.log(`${engine} ${suite}: ${checks.length} compiled-release checks passed.`);
