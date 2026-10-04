@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -32,11 +33,56 @@ const server = createServer(async (request, response) => {
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 await mkdir(output, { recursive: true });
+let visibilityExecutable;
+if (suite === "input-ownership") {
+  assert.equal(process.env.GITHUB_ACTIONS, "true", "Native window verification is confined to isolated hosted CI");
+  const browserRuntimeRequire = createRequire(require.resolve("playwright/package.json"));
+  assert.equal(require("playwright/package.json").version, "1.62.1", "Revalidate visibility adapters after a test-runtime upgrade");
+  assert.equal(browserRuntimeRequire("playwright-core/package.json").version, "1.62.1", "The active browser driver must match the pinned runtime");
+  if (engine === "firefox") {
+    // Juggler has no protocol switch for its forced-active docshell. Adapt only
+    // its two foreground defaults in a disposable copy, not the browser cache.
+    const executable = playwright.firefox.executablePath();
+    const adapterRoot = await mkdtemp(path.join(tmpdir(), "bamzooki-visibility-"));
+    const browserCopy = path.join(adapterRoot, "firefox");
+    await cp(path.dirname(executable), browserCopy, { recursive: true });
+    visibilityExecutable = path.join(browserCopy, path.basename(executable));
+    execFileSync("python3", ["-c", String.raw`
+import pathlib, sys, zipfile
+root = pathlib.Path(sys.argv[1])
+matches = []
+for archive in (root / "omni.ja", root / "browser" / "omni.ja"):
+    if not archive.is_file():
+        continue
+    with zipfile.ZipFile(archive) as source:
+        for entry in source.namelist():
+            if entry.endswith("juggler/content/content/main.js"):
+                matches.append((archive, entry, source.read(entry)))
+assert len(matches) == 1, "Expected one pinned Juggler content initializer"
+archive, entry, original = matches[0]
+adapted = original
+for before in (b"docShell.overrideHasFocus = true;", b"docShell.forceActiveState = true;"):
+    assert adapted.count(before) == 1, "Pinned Juggler foreground default changed"
+    adapted = adapted.replace(before, before.replace(b"true;", b"false;"))
+replacement = archive.with_suffix(".visibility-adapter")
+with zipfile.ZipFile(archive) as source, zipfile.ZipFile(replacement, "w") as target:
+    for info in source.infolist():
+        target.writestr(info, adapted if info.filename == entry else source.read(info))
+with zipfile.ZipFile(archive) as source, zipfile.ZipFile(replacement) as target:
+    assert source.namelist() == target.namelist(), "Adapter changed archive membership"
+    for name in source.namelist():
+        assert target.read(name) == (adapted if name == entry else source.read(name)), "Unexpected browser archive change"
+replacement.replace(archive)
+print("Disposable Firefox adapter: only Juggler foreground defaults disabled")
+`, browserCopy], { stdio: "inherit", timeout: 30_000 });
+  }
+}
 // The hosted runner has no physical GPU. Firefox needs an X display and an
 // explicit software-WebGL test profile. The visibility suite also needs a
 // headed Chromium software driver; neither setting enters the game.
 const browser = await playwright[engine].launch({
   headless: engine !== "firefox" && suite !== "input-ownership",
+  ...(visibilityExecutable ? { executablePath: visibilityExecutable } : {}),
   ...(engine === "chromium" && suite === "input-ownership"
     ? { args: ["--use-gl=angle", "--use-angle=swiftshader"] } : {}),
   ...(engine === "firefox" ? { firefoxUserPrefs: {
@@ -1987,14 +2033,12 @@ const inputOwnershipJourney = async () => {
 
   // Playwright forces foreground state by default. Remove those framework
   // overrides; never set document.hidden or dispatch a visibility event.
-  assert.equal(process.env.GITHUB_ACTIONS, "true", "Native window verification is confined to isolated hosted CI");
-  const browserRuntimeRequire = createRequire(require.resolve("playwright/package.json"));
-  assert.equal(require("playwright/package.json").version, "1.62.1", "Revalidate visibility adapters after a test-runtime upgrade");
-  assert.equal(browserRuntimeRequire("playwright-core/package.json").version, "1.62.1", "The active browser driver must match the pinned runtime");
   if (engine === "chromium") {
-    const session = await context.newCDPSession(page);
+    // The keep-visible capture belongs to the session that enabled it. A new
+    // CDP session cannot release the driver's existing foreground override.
+    const session = page._connection?.toImpl?.(page)?.delegate?._mainFrameSession?._client;
+    assert.equal(typeof session?.send, "function", "Pinned Chromium visibility adapter is unavailable");
     await session.send("Emulation.setFocusEmulationEnabled", { enabled: false });
-    await session.detach();
   } else if (engine === "webkit") {
     // This pinned internal adapter is necessary because WebKit has no public
     // protocol-session API. An omitted active value removes the override.
@@ -2061,7 +2105,18 @@ const inputOwnershipJourney = async () => {
   await expect(page.locator("#simulator-save-dialog")).toBeVisible();
   await page.locator("#simulator-replay-name").fill("Input ownership fixture");
   await page.locator("#simulator-save").click();
-  await expect(page.locator("#simulator-save-dialog")).toBeHidden();
+  try {
+    await expect(page.locator("#simulator-save-dialog")).toBeHidden();
+  } catch (error) {
+    console.log("Visibility save boundary:", await page.evaluate(() => ({
+      hidden: document.hidden,
+      focused: document.hasFocus(),
+      status: document.querySelector("#simulator-save-status")?.textContent,
+      header: document.querySelector("#build-status")?.textContent,
+      busy: document.querySelector("#simulator-save")?.disabled,
+    })));
+    throw error;
+  }
   recordCheck("Visibility: native window hide and restore freeze and restart live Simulator time, then save an ordinary recording");
 
   await switchKeepingDocument("motion-player");
