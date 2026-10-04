@@ -1754,6 +1754,8 @@ const browserRecoveryJourney = async () => {
     recordCheck("Replay loading: failed verification returns focus to Load, preserves exact replay bytes and permits an ordinary retry");
 
     for (const boundary of ["other-control", "open-dialog", "inactive-module"]) {
+      reportProgress(`Replay delayed completion: ${boundary} setup`);
+      await keyboardNavigate(page.locator("#motion-load"));
       const pending = await page.evaluateHandle(() => {
         const original = crypto.subtle.digest;
         let started = false;
@@ -1767,9 +1769,14 @@ const browserRecoveryJourney = async () => {
         return { started: () => started, resume: () => resume?.(), restore: () => { crypto.subtle.digest = original; } };
       });
       try {
-        await keyboardActivate(page.locator("#motion-load"));
+        await page.keyboard.press("Enter");
         await expect.poll(() => pending.evaluate(state => state.started())).toBe(true);
         await expect(page.locator("#motion-load")).toBeDisabled();
+        // Focus displacement to body does not reset the native Tab starting
+        // point. All later controls are busy; go back to the available list.
+        await page.keyboard.press("Shift+Tab");
+        await keyboardFocus(page.locator("#motion-replay-library"));
+        reportProgress(`Replay delayed completion: ${boundary} returned to library`);
         const modules = page.locator("#modules-command");
         await keyboardNavigate(modules);
         let owner = modules;
